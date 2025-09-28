@@ -190,17 +190,17 @@ class Curve_fit():
 
 
 
-        clustered = cv2.bitwise_or(ransac_right, ransac_left)
-        clustered = clustered.astype(np.uint8) * 255
-        normal = cv2.bitwise_or(sobelLeft, sobelRight)
-        normal = normal.astype(np.uint8) * 255
-        difference = cv2.absdiff(normal, clustered)
-        difference = cv2.dilate(difference, kernel3, iterations = 1)
-        clustered = cv2.dilate(clustered, kernel3, iterations = 1)
-        # Turn clusterd into an rgb image with difference as red channel
-        clustered = cv2.cvtColor(clustered, cv2.COLOR_GRAY2BGR)
+        # clustered = cv2.bitwise_or(ransac_right, ransac_left)
+        # clustered = clustered.astype(np.uint8) * 255
+        # normal = cv2.bitwise_or(sobelLeft, sobelRight)
+        # normal = normal.astype(np.uint8) * 255
+        # difference = cv2.absdiff(normal, clustered)
+        # difference = cv2.dilate(difference, kernel3, iterations = 1)
+        # clustered = cv2.dilate(clustered, kernel3, iterations = 1)
+        # # Turn clusterd into an rgb image with difference as red channel
+        # clustered = cv2.cvtColor(clustered, cv2.COLOR_GRAY2BGR)
 
-        clustered[:,:,0] = difference * 255
+        # clustered[:,:,0] = difference * 255
 
 
         #cv2.imshow("clustered", clustered)
@@ -237,28 +237,17 @@ class Curve_fit():
         #draw horizon line
         cv2.line(cluster_curve_image, (0, int(img.shape[0] * 0.5)), (img.shape[1], int(img.shape[0] * 0.5)), (255,255,255), 2)
         #cv2.imshow("cluster_curve", cluster_curve_image)
-        return np.array(waypoint), cluster_curve_image
-
-        mid = (leftCurve + rightCurve) / 2
-
-
-        #Curve image is an empty rgb image
-        x, y = img.shape[1], img.shape[0]
-        curveImage = np.zeros((y, x, 3), np.uint8)
-
-        cv2.polylines(curveImage, [np.int32(leftCurve)], isClosed=False, color=(255,0,0), thickness=2)
-        cv2.polylines(curveImage, [np.int32(rightCurve)], isClosed=False, color=(0,255,0), thickness=2)
-
-        # Sobel is a an empty rgb image
-        sobel = np.zeros((y, x, 3), np.uint8)
+        img_x, img_y = img.shape
+        sobel = np.zeros((img_x, img_y, 3), np.uint8)
         sobel[:,:,0] = sobelLeft
         # Add sobel right as green channel
         sobel[:,:,1] = sobelRight
-        #cv2.imshow("sobel", sobel)
-        #cv2.imshow("curve", curveImage)
-
-
-        return waypoint, np.zeros_like(img)
+        cv2.imshow("sobel", sobel)
+        curves_image = np.zeros_like(sobel)
+        cv2.polylines(curves_image, [np.int32(leftCurve)], isClosed=False, color=(255,0,0), thickness=2)
+        cv2.polylines(curves_image, [np.int32(rightCurve)], isClosed=False, color=(0,255,0), thickness=2)
+        cv2.imshow("curves", curves_image)
+        return np.array(waypoint), cluster_curve_image
     
 class BezierRansacModel:
     def __init__(self, seed_pt=None):

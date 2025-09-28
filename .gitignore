@@ -3,3 +3,5 @@ donkeycar_env/
 data/
 *.tar.gz
 *.whl
+AMP/
+images/
