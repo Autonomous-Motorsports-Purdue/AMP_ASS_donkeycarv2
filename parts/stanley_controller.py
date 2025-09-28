@@ -1,12 +1,13 @@
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 class Stanley_Controller():
     def __init__(self, speed):
         self.wheelbase = 1.000506 
         self.speed = speed
-        self.speed_fast = 0.45
+        self.speed_fast = 10.0
         self.speed_prev = self.speed_fast
         self.k_e = 0.5 # Cross track error correction higher value causes more agressive adjustments
 
@@ -40,18 +41,18 @@ class Stanley_Controller():
         steering_value = math.degrees(steering_angle) / 18.523
         angular_velocity = (self.speed_prev / self.wheelbase) * math.tan(steering_angle)
 
+        ret_speed = self.speed_prev
         # Reduce speed for sharp turns
-        if abs(math.degrees(steering_angle)) > 20:
-            ret_speed = self.speed * 0.75
+        if abs(math.degrees(steering_angle)) > 20 and self.speed_prev > self.speed_fast:
+            ret_speed = self.speed_prev * 0.75
         
         # Increase speed for minimal turning
-        if abs(steering_angle) < 3.0:
+        if abs(math.degrees(steering_angle)) <= 20.0:
             ret_speed = self.speed_fast * 0.5 + 0.5 * self.speed_prev
-        else:
-            ret_speed = self.speed
 
         self.speed_prev = ret_speed
-
+        
+        print(ret_speed)
         return angular_velocity, ret_speed
     
 import math
@@ -86,9 +87,17 @@ def create_path():
     # Generate points along a complex sine wave
     for i in np.arange(0, 200, 0.1):
         x = i
-        y = 5 * np.sin(x / 10) + 3 * np.sin(x / 5) + 4
+        y = 10 * np.sin(x / 20) + 7 * np.cos(x / 5)
         path.append([x, y])
     return np.array(path)
+
+
+# Use to create a path from a CSV
+def create_path_csv(filename):
+    df = pd.read_csv(filename)
+    path = df[['x', 'y']].to_numpy()
+    return path
+
 
 def find_closest_point(path, x, y):
     distances = np.sqrt((path[:,0]-x)**2 + (path[:,1]-y)**2)
@@ -96,16 +105,19 @@ def find_closest_point(path, x, y):
     # The Stanley controller uses the closest point, not a lookahead.
     return path[closest_idx]
 
-def simulate_stanley():
+def simulate_stanley(csv_file):
     dt = 0.01
-    total_time = 500.0
+    total_time = 50.0
 
     vehicle = KinematicBicycleModel(0.0, 0.0, 0.0, wheelbase=2.0, dt=dt)
-    controller = Stanley_Controller(speed=1.5)
-    path = create_path()
+    controller = Stanley_Controller(speed=0.45)
+    #path = create_path()
+    path = create_path_csv(csv_file)
 
     x_trajectory = [vehicle.x]
     y_trajectory = [vehicle.y]
+
+    current_speed = 0.45
 
     for _ in np.arange(0, total_time, dt):
         if np.hypot(vehicle.x - path[-1,0], vehicle.y - path[-1,1]) < 0.1:
@@ -130,11 +142,11 @@ def simulate_stanley():
         
         # 3. Pass the local coordinates to the controller
         angular_velocity, speed = controller.run(
-            (closest_point_local[0], closest_point_local[1], 0.0), controller.speed
+            (closest_point_local[0], closest_point_local[1], 0.0), current_speed
         )
         
         vehicle.update(speed, angular_velocity)
-
+        current_speed = speed
         x_trajectory.append(vehicle.x)
         y_trajectory.append(vehicle.y)
 
@@ -152,6 +164,4 @@ def simulate_stanley():
     plt.axis('equal')
     plt.show()
 
-if __name__ == "__main__":
-    simulate_stanley()
 
