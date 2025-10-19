@@ -54,8 +54,6 @@ class Stanley_Controller():
 
         return angular_velocity, ret_speed
     
-import math
-
 class KinematicBicycleModel:
     def __init__(self, x, y, heading, wheelbase, dt):
         self.x = x
