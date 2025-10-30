@@ -38,7 +38,7 @@ class IMU:
         try:
             parts = [p.strip() for p in line.split(",")]
             parts = [p[3:] if "=" in p else p for p in parts]  # remove 'gx=', etc.
-            gx, gy, gz, ax, ay, az = [float(v) for v in parts]
+            ax, ay, az, gx, gy, gz = [float(v) for v in parts]
 
             self.yaw_rate = math.radians(gz)
 
