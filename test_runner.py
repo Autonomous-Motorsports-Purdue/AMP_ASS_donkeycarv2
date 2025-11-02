@@ -6,7 +6,9 @@ from parts.viewer import Viewer
 # from parts.curve_fit import Curve_fit
 # from parts.onnx import Onnx
 from parts.depth_printer import DepthPrinter
+from parts.zed_frame_publisher import Zed_Frame_Publisher
 from parts.pixel_to_real import PixelToReal
+from parts.pixel_picker import PixelPicker
 if __name__ == "__main__":
     V = dk.vehicle.Vehicle()
     print("starting")
@@ -16,7 +18,9 @@ if __name__ == "__main__":
     # V.add(Preprocessor(), inputs=['image'], outputs=['test'])
     # V.add(Onnx(), inputs=['image'], outputs=['lane', 'drive'])
     # V.add(Curve_fit(), inputs=['lane', 'drive'], outputs=['waypoint', 'lines'])
-    V.add(PixelToReal(), inputs=[], outputs=['x', 'y', 'z'])
+    V.add(Zed_Frame_Publisher(), outputs=['left', 'right', 'depth'])
+    V.add(PixelPicker(), inputs=[], outputs=['u', 'v'])
+    V.add(PixelToReal(), inputs=['u','v'], outputs=['x', 'y', 'z'])
     #V.add(Viewer("Image"), inputs=['left'], outputs=[])
     # V.add(Viewer("Segmented"), inputs=['right'], outputs=[])
     # V.add(Viewer("Lines"), inputs=['depth'], outputs=[])

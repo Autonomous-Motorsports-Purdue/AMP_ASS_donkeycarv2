@@ -9,7 +9,7 @@ class Zed_Frame_Publisher:
         init = sl.InitParameters()
         init.camera_resolution = sl.RESOLUTION.HD720
         init.depth_mode = sl.DEPTH_MODE.ULTRA
-        init.coordinate_units = sl.UNIT.METER
+        init.coordinate_units = sl.UNIT.CENTIMETER
         #init.camera_disable_self_calib = True
         init.depth_minimum_distance = 0.5
 
@@ -63,8 +63,8 @@ class Zed_Frame_Publisher:
         print(calibration_params)
 
         # Dump to binary file
-        with open("zed_calibration_params.bin", "wb") as f:
-            pickle.dump(hard_coded, f)
+        # with open("zed_calibration_params.bin", "wb") as f:
+        #     pickle.dump(hard_coded, f)
 
         print("ZED camera connected")
 
