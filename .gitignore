@@ -4,4 +4,4 @@ data/
 *.tar.gz
 *.whl
 AMP/
-images/
+images*/
