@@ -9,7 +9,7 @@ class Zed_Frame_Publisher:
         init = sl.InitParameters()
         init.camera_resolution = sl.RESOLUTION.HD720
         init.depth_mode = sl.DEPTH_MODE.ULTRA
-        init.coordinate_units = sl.UNIT.CENTIMETER
+        init.coordinate_units = sl.UNIT.INCH
         #init.camera_disable_self_calib = True
         init.depth_minimum_distance = 0.5
 
@@ -63,8 +63,8 @@ class Zed_Frame_Publisher:
         print(calibration_params)
 
         # Dump to binary file
-        # with open("zed_calibration_params.bin", "wb") as f:
-        #     pickle.dump(hard_coded, f)
+        with open("zed_calibration_params.bin", "wb") as f:
+            pickle.dump(calibration_params, f)
 
         print("ZED camera connected")
 
@@ -76,7 +76,11 @@ class Zed_Frame_Publisher:
             self.zed.retrieve_image(right, sl.VIEW.RIGHT)
             depth = sl.Mat()
             self.zed.retrieve_measure(depth, sl.MEASURE.DEPTH)
+            point_cloud = sl.Mat()
+            self.zed.retrieve_measure(point_cloud, sl.MEASURE.XYZRGBA)
             #self.zed.retrieve_image(depth, sl.VIEW.DEPTH)
             # cv2.imshow("ZED", image.get_data())
 
-            return np.array(left.get_data()), np.array(right.get_data()), np.array(depth.get_data())
+            return np.array(left.get_data()), np.array(right.get_data()), depth, point_cloud
+        print("ZED camera not connected")
+        return None
