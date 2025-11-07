@@ -14,8 +14,7 @@ class IMU:
         self.baud = baud
         self.debug = debug
         self.yaw_rate = 0.0
-        self.gx = self.gy = self.gz = 0.0
-        self.ax = self.ay = self.az = 0.0
+        self.yaw = 0.0
 
         try:
             self.ser = serial.Serial(self.port, self.baud, timeout=1)
@@ -29,11 +28,11 @@ class IMU:
     def run(self):
         """Read a line of 6 comma-separated IMU values and return yaw_rate."""
         if not self.ser_io:
-            return self.yaw_rate
+            return self.yaw_rate, self.yaw
 
         line = self.ser_io.readline().strip()
         if not line:
-            return self.yaw_rate
+            return self.yaw_rate, self.yaw
 
         try:
             parts = [p.strip() for p in line.split(",")]
@@ -41,6 +40,7 @@ class IMU:
             ax, ay, az, gx, gy, gz = [float(v) for v in parts]
 
             self.yaw_rate = math.radians(gz)
+            self.yaw = math.radians(az)
 
             if self.debug:
                 print(f"Yaw rate: {self.yaw_rate:.4f} rad/s")
@@ -49,4 +49,4 @@ class IMU:
             if self.debug:
                 print(f"[IMUPart] Parse error: {e} | Line: {line}")
 
-        return self.yaw_rate
+        return self.yaw_rate, self.yaw
