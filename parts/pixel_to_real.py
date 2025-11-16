@@ -56,11 +56,40 @@ class PixelToReal:
         homogeneous_image = np.array([u, v, 1])
         x_c = self.camera_matrix_inv @ homogeneous_image * depth
         result = self.translation + self.rotation_matrix @ x_c
-        scaled_result = result.copy()
-        scaled_result[2] *= 1.12 # attempted depth correction
+        # scaled_result = result.copy()
+        #scaled_result[2] *= 1.12 # attempted depth correction
         #print("u:", u, "v:", v)
+
+        # start force y=0
+
+        # 1. Original world point
+        camera_point = np.array([pc_x, pc_y, pc_z])
+        world_original = self.translation + self.rotation_matrix @ camera_point
+
+        # 2. Ray direction in camera frame
+        ray_cam = camera_point / np.linalg.norm(camera_point)
+
+        # 3. Ray in world frame
+        ray_world = self.rotation_matrix @ ray_cam
+        camera_origin_world = self.translation
+
+        # 4. Compute ground intersection (y = 0)
+        t = -camera_origin_world[1] / ray_world[1]
+        ground_point = camera_origin_world + t * ray_world
+
+        # 5. Blend between original and ground
+        alpha = 0.5  # adjust this 0–1
+        partial_ground_point = (1 - alpha) * world_original + alpha * ground_point
+
+        # end force y=0
+
+        np.set_printoptions(suppress=True)
         print("depth:", depth)
-        print("point cloud results: ", world_coords)
+        print("pc_x, pc_y, pc_z:", pc_x, pc_y, pc_z)
+        print("distance match:", np.sqrt(pc_x ** 2 + pc_y ** 2 + pc_z ** 2))
+        print("ground_point:", ground_point)
+        print("partial_ground_point:", partial_ground_point)
+        #print("point cloud results: ", world_coords)
         print("results:", result)
-        print("scaled_result:", scaled_result)
-        return result
+        #print("scaled_result:", scaled_result)
+        return partial_ground_point

@@ -1,17 +1,18 @@
 import pyzed.sl as sl
-import cv2
 import numpy as np
 import pickle
+import cv2
 
 class Zed_Frame_Publisher:
     def __init__(self):
         self.zed = sl.Camera()
         init = sl.InitParameters()
         init.camera_resolution = sl.RESOLUTION.HD720
-        init.depth_mode = sl.DEPTH_MODE.ULTRA
+        init.depth_mode = sl.DEPTH_MODE.PERFORMANCE
         init.coordinate_units = sl.UNIT.INCH
         #init.camera_disable_self_calib = True
-        #init.depth_minimum_distance = 0.5
+        init.depth_minimum_distance = 12
+        init.depth_stabilization = 20
 
         err = self.zed.open(init)
         if err != sl.ERROR_CODE.SUCCESS:
@@ -78,7 +79,9 @@ class Zed_Frame_Publisher:
             self.zed.retrieve_measure(depth, sl.MEASURE.DEPTH)
             point_cloud = sl.Mat()
             self.zed.retrieve_measure(point_cloud, sl.MEASURE.XYZRGBA)
-
+            # depth_image = sl.Mat()
+            # self.zed.retrieve_image(depth_image, sl.VIEW.DEPTH)
+            # cv2.imshow("Depth", depth_image.get_data())
             return np.array(left.get_data()), np.array(right.get_data()), depth, point_cloud
         print("ZED camera not connected")
         return None
