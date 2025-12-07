@@ -2,9 +2,18 @@ import numpy as np
 import cv2
 from math import factorial
 from skimage.measure import ransac
+from sklearn.cluster import DBSCAN
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+import pickle
+
 
 class Curve_fit():
+    
     def __init__(self):
+        self.rollingBottomCropMeans = [1] * 5
+        self.rollingAvg = 1
+        self.savedCount = 1
         pass
 
     def run(self, lanes, track):
@@ -75,7 +84,44 @@ class Curve_fit():
         # if there are no points in the right quarter of the image and left is False, return empty image
         if not left and np.sum(points[:, 0] > image.shape[1] // 6) == 0:
             print("No points in right quarter of the image")
-            return np.zeros_like(image, dtype=np.uint8) 
+            return np.zeros_like(image, dtype=np.uint8)
+        
+        xsMean = np.mean(xs)
+        xsSD = np.std(xs)
+        # print("xsMean: " + str(xsMean) + ", xsSD: " + str(xsSD))
+        
+        if False:
+            for i in range(0, len(points)):
+                if i >= len(points):
+                    break
+                if abs(abs(points[i, 0]) - abs(xsMean)) >= xsSD * 0:
+                    # print(points[i, 0])
+                    points = np.delete(points, i, axis=0)
+                    i -= 1
+               
+        if True:
+            dbscan = DBSCAN(eps=50, min_samples=5) // TODO: TUNE THIS
+            dbscan.fit(points)
+            
+            # pca = PCA(n_components=2).fit(points)
+            # pca_2d = pca.transform(points)
+            output = []
+            
+            for i in range(0, len(dbscan.labels_)):
+                if dbscan.labels_[i] == 0:
+                    output.append([points[i, 0], points[i, 1]])
+            
+            newPts = np.asarray(output, dtype=np.int32)
+            
+            print(type(newPts))
+            # print(newPts == points)
+            # diff = newPts == points
+            # for i in range(len(newPts == points)):
+            #     if (diff[i].all() != True):
+            #         print(str(newPts[i]) + " - " + str(points[i]))
+            #     pass
+            # cv2.imshow("dbscan", newPts)
+            points = newPts
         
         best_model, inliers = ransac(
             data=points,
@@ -87,20 +133,20 @@ class Curve_fit():
 
         # 3. recover the inlier points and make your “clean” mask
         inlier_pts = points[inliers].squeeze()
-        #new_inlier_pts = []
-        #for point in inlier_pts:
-            # print(point, point.shape)
+        # new_inlier_pts = []
+        # for point in inlier_pts:
+        #     print(point, point.shape)
         #    _ = point
-        #    try:
-        #        if point[0] > image.shape[1] or point[1] > image.shape[0]:
+        #     try:
+        #         if point[0] > image.shape[1] or point[1] > image.shape[0]:
         #            pass
-        #        else:
+        #         else:
         #            new_inlier_pts.append(point)
-        #    except Exception as e:
+        #     except Exception as e:
         #        print(inlier_pts)
         #        print("point", point)
         #        print(e)
-        #inlier_pts = np.array(new_inlier_pts)
+        # inlier_pts = np.array(new_inlier_pts)
         #mask = (
         #    (inlier_pts[:, 0] < image.shape[1]) &
         #    (inlier_pts[:, 1] < image.shape[0])
@@ -138,6 +184,29 @@ class Curve_fit():
     def track(self, img):
         # set top 50 pixels to black
         img[0:50,:] = 0
+        
+        # set bottom n pixels to black if their mean is >0.9
+        bottomCrop = -130
+        bottomCropThreshold = 0
+        bottomCropBorderThreshold = 0.7
+        rollingAvgThreshold = 0.98
+        cropMean = float(np.mean(img[bottomCrop:img.shape[0], :])) / 255
+        cropMeanBorder = float(np.mean(img[bottomCrop-5:bottomCrop, :])) / 255
+        self.rollingBottomCropMeans.append(cropMean)
+        self.rollingBottomCropMeans.pop(0)
+        self.rollingAvg = np.mean(self.rollingBottomCropMeans)
+        
+        # print(self.rollingBottomCropMeans)
+        # print(self.rollingAvg)
+        
+        # if (cropMean > bottomCropThreshold and cropMeanBorder > bottomCropBorderThreshold) or self.rollingAvg > rollingAvgThreshold:
+        #     img[bottomCrop:, :] = 0
+        # else:
+        #     # print("cropMean: " + str(cropMean))
+        #     # print("cropMeanBorder: " + str(cropMeanBorder))
+        #     pass
+            
+        
         kernel5 = np.ones((5,5),np.uint8)
         kernel3 = np.ones((3,3),np.uint8)
         # erode = cv2.erode(img, kernel5, iterations = 5)
@@ -180,30 +249,37 @@ class Curve_fit():
 
         sobelLeft = cv2.Sobel(img, cv2.CV_8UC1, 1, 0, ksize=1)
         sobelLeft[:, :2] = 0
+        
+        with open('ransacDumps/sobelLeft' + str(self.savedCount) + '.pkl', 'wb') as f:
+            pickle.dump(sobelLeft, f)
         ransac_left = self.ransac(sobelLeft, True)
 
         inverse = cv2.bitwise_not(img)
         sobelRight = cv2.Sobel(inverse, cv2.CV_8UC1, 1, 0, ksize=1)
         sobelRight[:, -2:] = 0
+        
+        with open('ransacDumps/sobelRight' + str(self.savedCount) + '.pkl', 'wb') as f:
+            pickle.dump(sobelLeft, f)
 
         ransac_right = self.ransac(sobelRight, False)
 
+        self.savedCount += 1
 
+        clustered = cv2.bitwise_or(ransac_right, ransac_left)
+        clustered = clustered.astype(np.uint8) * 255
+        normal = cv2.bitwise_or(sobelLeft, sobelRight)
+        normal = normal.astype(np.uint8) * 255
+        difference = cv2.absdiff(normal, clustered)
+        difference = cv2.dilate(difference, kernel3, iterations = 1)
+        clustered = cv2.dilate(clustered, kernel3, iterations = 1)
+        # Turn clusterd into an rgb image with difference as red channel
+        clustered = cv2.cvtColor(clustered, cv2.COLOR_GRAY2BGR)
 
-        # clustered = cv2.bitwise_or(ransac_right, ransac_left)
-        # clustered = clustered.astype(np.uint8) * 255
-        # normal = cv2.bitwise_or(sobelLeft, sobelRight)
-        # normal = normal.astype(np.uint8) * 255
-        # difference = cv2.absdiff(normal, clustered)
-        # difference = cv2.dilate(difference, kernel3, iterations = 1)
-        # clustered = cv2.dilate(clustered, kernel3, iterations = 1)
-        # # Turn clusterd into an rgb image with difference as red channel
-        # clustered = cv2.cvtColor(clustered, cv2.COLOR_GRAY2BGR)
+        clustered[:,:,0] = difference * 255
 
-        # clustered[:,:,0] = difference * 255
-
-
-        #cv2.imshow("clustered", clustered)
+        cv2.imshow("clustered", clustered)
+        
+        
 
         leftCurve = get_bezier_curve(sobelLeft)
         rightCurve = get_bezier_curve(sobelRight)
