@@ -52,7 +52,9 @@ class UART_backup_driver:
         Donkeycar compatible run function
         DOnkeycar gives (-1, 1) for steering and (-1, 1) for throttle
         """
-        print(f"T:{v}, S:{s}")
+        if self._iter % 10 == 0:
+            print(f"T:{v}, S:{s}")
+        alive=True
         if not alive:
             self.reset_kart()
             return
@@ -68,11 +70,18 @@ class UART_backup_driver:
         # clip throttle to (-100, 100)
         v = max(-200, min(200, v))
 
-        print(f"Throttle: {v}, Steering: {s}")
+        if self._iter % 10 == 0:
+            print(f"Throttle: {v}, Steering: {s}")
+
 
         self.update_velocity(v)
         self.update_steering(s)
-        print(f"New steering: {self.curr_s}")
+        self.curr_s *= 10
+        self.curr_v *= 10
+        # account for line end?
+        if self._iter % 10 == 0:
+            print(f"New steering: {self.curr_s}")
+            print(f"New Throttle: {self.curr_v}")
 
         self.write_serial()
 

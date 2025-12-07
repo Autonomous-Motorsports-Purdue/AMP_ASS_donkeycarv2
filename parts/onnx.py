@@ -4,16 +4,14 @@ import onnxruntime as rt
 
 class Onnx:
     def __init__(self):
-        self.sess = rt.InferenceSession(
-            "./model_proc.static_int8.onnx",
-            providers=[('CUDAExecutionProvider', {"cudnn_conv_algo_search": "EXHAUSTIVE"})])
+        self.sess = rt.InferenceSession( "model_proc.static_int8.onnx", providers=[('CUDAExecutionProvider', {"cudnn_conv_algo_search": "DEFAULT"})])
         print('model loaded')
 
     def run(self, img):
+        img = cv2.resize(img, (640, 360))
+            # cut 4 pixels off each left and right side & reshape array to be 352x640x3
         img = img[4:-4, :, :]
         img_rs=img.copy()
-        
-        
 
         img = img[:, :, ::-1].transpose(2, 0, 1)
         img = np.ascontiguousarray(img)
