@@ -8,7 +8,7 @@ class Zed_Frame_Publisher:
         self.zed = sl.Camera()
         init = sl.InitParameters()
         init.camera_resolution = sl.RESOLUTION.HD720
-        init.depth_mode = sl.DEPTH_MODE.PERFORMANCE
+        init.depth_mode = sl.DEPTH_MODE.NEURAL
         init.coordinate_units = sl.UNIT.INCH
         #init.camera_disable_self_calib = True
         init.depth_minimum_distance = 12
@@ -21,6 +21,17 @@ class Zed_Frame_Publisher:
             exit(1)
 
         self.runtime = sl.RuntimeParameters()
+        self.runtime.measure3D_reference_frame = sl.REFERENCE_FRAME.CAMERA
+
+        tracking_params = sl.PositionalTrackingParameters()
+        err = self.zed.enable_positional_tracking(tracking_params)
+        if err != sl.ERROR_CODE.SUCCESS:
+            print("Positional tracking failed:", repr(err))
+            self.zed.close()
+            exit(1)
+
+
+
 
         calibration_params = self.zed.get_camera_information().camera_configuration.calibration_parameters
 
@@ -49,17 +60,17 @@ class Zed_Frame_Publisher:
             "p2": p2
         }
 
-        hard_coded = {
-            "fx":701.12,
-            "fy":701.12,
-            "cx":610.83,
-            "cy":380.3405,
-            "k1":-0.175609,
-            "k2":0.0273627,
-            "p1":0.000324635,
-            "p2":0.00135292,
-            "k3":0.0
-        }
+        # hard_coded = {
+        #     "fx":701.12,
+        #     "fy":701.12,
+        #     "cx":610.83,
+        #     "cy":380.3405,
+        #     "k1":-0.175609,
+        #     "k2":0.0273627,
+        #     "p1":0.000324635,
+        #     "p2":0.00135292,
+        #     "k3":0.0
+        # }
 
         #print(calibration_params)
 

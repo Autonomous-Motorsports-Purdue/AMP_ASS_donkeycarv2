@@ -43,12 +43,11 @@ class PixelPicker:
             self.shutdown()
             sys.exit(0)
 
-        # Return (u,v) only once per new click
-        if self.new_click_ready:
-            self.new_click_ready = False
-            return self.clicked_point
-
-        return None, None
+        # Return (u,v)
+        if self.clicked_point is None:
+            print("No point selected")
+            return None, None
+        return self.clicked_point
 
     def shutdown(self):
         """Close the window gracefully."""
