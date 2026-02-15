@@ -18,7 +18,7 @@ class PixelToPlane:
       - plane_normal: (nx,ny,nz) or None
     """
 
-    def __init__(self, zed: sl.Camera, dist_thresh=0.1, alpha=0.35):
+    def __init__(self, zed: sl.Camera, dist_thresh=1.0, alpha=0.35):
         self.zed = zed
         self.dist_thresh = float(dist_thresh)
         self.alpha = float(alpha)
@@ -53,6 +53,8 @@ class PixelToPlane:
         n = self.hit_plane.get_normal()
         plane_eq = (float(eq[0]), float(eq[1]), float(eq[2]), float(eq[3]))
         plane_normal = (float(n[0]), float(n[1]), float(n[2]))
+
+
         print("plane_eq:", plane_eq)
         print("plane_normal:", plane_normal)
 
@@ -74,7 +76,7 @@ class PixelToPlane:
         if denom < 1e-8:
             return img, plane_eq, plane_normal
 
-        # signed distance in inches (because you set UNIT.INCH), since we normalize
+        # signed distance, since we normalize
         dist = (a*X + b*Y + c*Z + d) / denom
         mask = valid & (np.abs(dist) < self.dist_thresh)
 

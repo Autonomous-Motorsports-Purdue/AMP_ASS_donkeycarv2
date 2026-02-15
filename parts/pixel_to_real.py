@@ -84,12 +84,12 @@ class PixelToReal:
         # end force y=0
 
         np.set_printoptions(suppress=True)
-        print("depth:", depth)
-        print("pc_x, pc_y, pc_z:", pc_x, pc_y, pc_z)
-        print("distance match:", np.sqrt(pc_x ** 2 + pc_y ** 2 + pc_z ** 2))
-        print("ground_point:", ground_point)
+        #print("depth:", depth)
+        #print("pc_x, pc_y, pc_z:", pc_x, pc_y, pc_z)
+        #print("distance match:", np.sqrt(pc_x ** 2 + pc_y ** 2 + pc_z ** 2))
+        #print("ground_point:", ground_point)
         print("partial_ground_point:", partial_ground_point)
         #print("point cloud results: ", world_coords)
-        print("results:", result)
+        #print("results:", result)
         #print("scaled_result:", scaled_result)
         return partial_ground_point
