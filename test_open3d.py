@@ -63,7 +63,7 @@ def create_point_cloud(points):
 
 def read_live_data():
     # 1. Setup the decoder
-    config = vd.Config(min_range=0, max_range=GRID_RANGE, min_angle=270, max_angle=270)
+    config = vd.Config(min_range=0, max_range=GRID_RANGE)
     decoder = vd.StreamDecoder(config)
 
     # 2. Setup the UDP socket
@@ -122,7 +122,7 @@ def read_live_data():
 
 
 def read_from_file(file_path):
-    config = vd.Config(model=vd.Model.VLP16, min_range=0.5)
+    config = vd.Config(model=vd.Model.VLP16, min_range=0, max_range=GRID_RANGE)
     decoder = vd.StreamDecoder(config)
 
     vis = o3d.visualization.Visualizer()
