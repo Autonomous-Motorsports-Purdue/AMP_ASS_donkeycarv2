@@ -8,9 +8,9 @@ import cv2
 
 # --- Configuration ---
 PORT = 2368
-IS_LIVE = 1
-GRID_RES = 0.1      # Meters per cell
-GRID_RANGE = 20     # +/- 20 meters (Total 40m x 40m grid)
+IS_LIVE = 0  # Set to 1 for live data, 0 for pcap file
+GRID_RES = 0.05     # Meters per cell
+GRID_RANGE = 20 # +/- 20 meters (Total 40m x 40m grid)
 
 HEIGHT_RANGE = (-.25, 2) # Only include points between values in meters relative to the puck 
 
@@ -31,8 +31,8 @@ def create_occupancy_grid(points, resolution, grid_range):
     grid_size = int((grid_range * 2) / resolution)
     
     # 4. Map to indices (Shift by grid_range to keep values positive)
-    grid_x = ((points[:, 1] + grid_range) / resolution).astype(np.int32)
-    grid_y = ((points[:, 0] + grid_range) / resolution).astype(np.int32)
+    grid_x = ((points[:, 0] + grid_range) / resolution).astype(np.int32)
+    grid_y = ((points[:, 1] + grid_range) / resolution).astype(np.int32)
 
     # 5. Populate Grid
     grid = np.zeros((grid_size, grid_size), dtype=np.uint8)
@@ -190,19 +190,36 @@ def read_from_file(file_path):
     vis.destroy_window()
 
 def visualize_pro_occupancy_grid(grid):
-    # Create a 3-channel BGR image
+    # 1. Setup Canvas
     display_size = (800, 800)
+    # Convert grayscale to BGR for colored markers
     color_grid = cv2.cvtColor(grid, cv2.COLOR_GRAY2BGR)
     
-    # Color all 'occupied' pixels (255) as Red
+    # 2. Draw Distance Markers (Meters)
+    # We iterate through the meter range to find pixel indices
+    for m in range(-GRID_RANGE, GRID_RANGE + 1):
+        
+        # Convert meter coordinate to pixel coordinate
+        # Formula: (meter + range) / resolution
+        pix_pos = int((m + GRID_RANGE) / GRID_RES)
+        
+        # Draw Vertical Meter Lines (Constant X)
+        cv2.line(color_grid, (pix_pos, 0), (pix_pos, grid.shape[0]), (40, 40, 40), 1)
+        # Draw Horizontal Meter Lines (Constant Y)
+        cv2.line(color_grid, (0, pix_pos), (grid.shape[1], pix_pos), (40, 40, 40), 1)
+
+    # 3. Draw Main Axes (0,0)
+    origin_pix = int(GRID_RANGE / GRID_RES)
+    cv2.line(color_grid, (origin_pix, 0), (origin_pix, grid.shape[0]), (100, 100, 100), 1) # Y-axis
+    cv2.line(color_grid, (0, origin_pix), (grid.shape[1], origin_pix), (100, 100, 100), 1) # X-axis
+
+    # 4. Color 'occupied' pixels Red
     color_grid[grid == 255] = [0, 0, 255] 
     
-    # Draw a small circle in the middle to represent your sensor (0,0)
-    center = (display_size[0] // 2, display_size[1] // 2)
-    cv2.circle(color_grid, center, 5, (0, 255, 0), -1) # Green dot for sensor
-    
+    # 6. Final Display
+    # Note: We flip it because image Y increases downwards, but spatial Y increases upwards
     resized = cv2.resize(color_grid, display_size, interpolation=cv2.INTER_NEAREST)
-    cv2.imshow("Occupancy Grid", cv2.flip(resized, 0))
+    cv2.imshow("Occupancy Grid (with Scale)", cv2.flip(resized, 0))
     cv2.waitKey(1)
 
 if __name__ == "__main__":
