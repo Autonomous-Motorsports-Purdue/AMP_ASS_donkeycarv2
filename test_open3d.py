@@ -12,7 +12,7 @@ TEST_DATA_FILE = 'test_pcap.pcap'   # Path to a PCAP file
 
 # --- Config ---
 GRID_RES = 0.1                      # Meters per cell
-GRID_RANGE = 20                     # Range of grid in meters (Total ~140m square grid for our VLP 16)
+GRID_RANGE = 5                      # Range of grid in meters from center (Max ~70m square grid for our VLP 16)
 HEIGHT_RANGE = (-.25, 2)            # Only include points between values in meters relative to the LiDAR
 
 # --- Constants that should not change ---
@@ -23,28 +23,29 @@ def create_occupancy_grid(points, resolution, grid_range):
     Translates world coordinates to a 2D occupancy grid.
     Formula: $index = \lfloor \frac{point + range}{resolution} \rfloor$
     """
-    # 1. Height filtering (Ignore ground and ceiling)
+    # Height filtering (Ignore ground and ceiling)
     mask_z = (points[:, 2] > HEIGHT_RANGE[0]) & (points[:, 2] < HEIGHT_RANGE[1])
     points = points[mask_z]
 
-    # 2. Spatial filtering (X and Y bounds)
+    # Spatial filtering (X and Y bounds)
     mask_xy = (np.abs(points[:, 0]) < grid_range) & (np.abs(points[:, 1]) < grid_range)
     points = points[mask_xy]
 
-    # 3. Calculate Grid Size
+    # Calculate Grid Size
     grid_size = int((grid_range * 2) / resolution)
     
-    # 4. Map to indices (Shift by grid_range to keep values positive)
+    # Map to indices (Shift by grid_range to keep values positive)
     grid_x = ((points[:, 0] + grid_range) / resolution).astype(np.int32)
     grid_y = ((points[:, 1] + grid_range) / resolution).astype(np.int32)
 
-    # 5. Populate Grid
+    # Populate Grid
     grid = np.zeros((grid_size, grid_size), dtype=np.uint8)
+    
     # Clip to avoid index errors at the very edge of the range
     grid_x = np.clip(grid_x, 0, grid_size - 1)
     grid_y = np.clip(grid_y, 0, grid_size - 1)
     
-    grid[grid_y, grid_x] = 255  # 255 for high visibility (Occupied)
+    grid[grid_y, grid_x] = 1  # 1 for high visibility (Occupied)
     
     return grid
 
@@ -64,6 +65,45 @@ def create_point_cloud(points):
     pcd.points = o3d.utility.Vector3dVector(xyz)
     pcd.colors = o3d.utility.Vector3dVector(colors)
     return pcd
+
+def process_scan(scan, pcd, vis, first_scan): 
+    if scan is None:
+        return -1
+
+    points = scan[1]
+    if len(points) == 0: return -1
+
+    occ_grid = create_occupancy_grid(points, GRID_RES, GRID_RANGE)
+    
+    # VISUAL - updates the occupancy grid visualizer
+    visualize_pro_occupancy_grid(occ_grid)
+    
+    new_pcd = create_point_cloud(points)
+    pcd.points = new_pcd.points
+
+    # VISUAL - updates the OPEN3D visualizer
+    pcd.colors = new_pcd.colors
+    if first_scan:
+        vis.add_geometry(pcd)
+        
+        # Set a fixed view (looking down from above)
+        ctr = vis.get_view_control()
+        ctr.set_front([0, 0, 1])
+        ctr.set_up([0, 1, 0])
+        ctr.set_lookat([0, 0, 0])
+        ctr.set_zoom(0.3)
+        
+        print("First scan received, visualizer initialized.")
+        print(np.asarray(pcd.points)[:5])
+    else:
+        vis.update_geometry(pcd)
+
+    # VISUAL - Show a new frame in the OPEN3D visualizer
+    vis.poll_events()
+    vis.update_renderer()
+
+    if not vis.poll_events():
+        return -1
 
 def read_live_data():
     # Setup the decoder
@@ -89,44 +129,12 @@ def read_live_data():
 
         scan = decoder.decode(stamp, data)
         
-        if scan is None:
+        error = process_scan(scan, pcd, vis, first_scan)
+        if error == 0:
             continue
-
-        points = scan[1]
-        if len(points) == 0: continue
-
-        occ_grid = create_occupancy_grid(points, GRID_RES, GRID_RANGE)
-        
-        # VISUAL - updates the occupancy grid visualizer
-        visualize_pro_occupancy_grid(occ_grid)
-        
-        new_pcd = create_point_cloud(points)
-        pcd.points = new_pcd.points
-
-        # VISUAL - updates the OPEN3D visualizer
-        pcd.colors = new_pcd.colors
-        if first_scan:
-            vis.add_geometry(pcd)
-            first_scan = False
-            
-            # Set a fixed view (looking down from above)
-            ctr = vis.get_view_control()
-            ctr.set_front([0, 0, 1])
-            ctr.set_up([0, 1, 0])
-            ctr.set_lookat([0, 0, 0])
-            ctr.set_zoom(0.3)
-            
-            print("First scan received, visualizer initialized.")
-            print(np.asarray(pcd.points)[:5])
-        else:
-            vis.update_geometry(pcd)
-
-        # VISUAL - Show a new frame in the OPEN3D visualizer
-        vis.poll_events()
-        vis.update_renderer()
-
-        if not vis.poll_events():
+        elif error == -1:
             break
+        first_scan = False
 
     vis.destroy_window()
 
@@ -170,42 +178,19 @@ def read_from_file(file_path):
             # The decoder now receives the correct bytearray type
             scan = decoder.decode(float(stamp), payload)
 
-            if scan is not None:
-                points = scan[1]
-                if len(points) == 0: continue
-
-                # Occupancy Grid logic
-                occ_grid = create_occupancy_grid(points, GRID_RES, GRID_RANGE)
-                # --- VISUALIZE THE GRID ---
-                visualize_pro_occupancy_grid(occ_grid)
-                # Point Cloud Visualization
-                new_pcd = create_point_cloud(points)
-                pcd.points = new_pcd.points
-                pcd.colors = new_pcd.colors
-
-                if first_scan:
-                    vis.add_geometry(pcd)
-                    ctr = vis.get_view_control()
-                    ctr.set_front([0, 0, 1])
-                    ctr.set_up([0, 1, 0])
-                    ctr.set_lookat([0, 0, 0])
-                    ctr.set_zoom(0.3)
-                    first_scan = False
-                else:
-                    vis.update_geometry(pcd)
-
-                if not vis.poll_events(): break
-                vis.update_renderer()
+            process_scan(scan, pcd, vis, first_scan)
+            first_scan = False
                 
     vis.destroy_window()
 
 def visualize_pro_occupancy_grid(grid):
-    # 1. Setup Canvas
+    # Setup Canvas
     display_size = (800, 800)
+    
     # Convert grayscale to BGR for colored markers
     color_grid = cv2.cvtColor(grid, cv2.COLOR_GRAY2BGR)
     
-    # 2. Draw Distance Markers (Meters)
+    # Draw Distance Markers (Meters)
     # We iterate through the meter range to find pixel indices
     for m in range(-GRID_RANGE, GRID_RANGE + 1):
         
@@ -218,15 +203,15 @@ def visualize_pro_occupancy_grid(grid):
         # Draw Horizontal Meter Lines (Constant Y)
         cv2.line(color_grid, (0, pix_pos), (grid.shape[1], pix_pos), (40, 40, 40), 1)
 
-    # 3. Draw Main Axes (0,0)
+    # Draw Main Axes (0,0)
     origin_pix = int(GRID_RANGE / GRID_RES)
     cv2.line(color_grid, (origin_pix, 0), (origin_pix, grid.shape[0]), (100, 100, 100), 1) # Y-axis
     cv2.line(color_grid, (0, origin_pix), (grid.shape[1], origin_pix), (100, 100, 100), 1) # X-axis
 
-    # 4. Color 'occupied' pixels Red
-    color_grid[grid == 255] = [0, 0, 255] 
+    # Color 'occupied' pixels Red
+    color_grid[grid == 1] = [0, 0, 255] 
     
-    # 6. Final Display
+    #Final Display
     # Note: We flip it because image Y increases downwards, but spatial Y increases upwards
     resized = cv2.resize(color_grid, display_size, interpolation=cv2.INTER_NEAREST)
     cv2.imshow("Occupancy Grid (with Scale)", cv2.flip(resized, 0))
