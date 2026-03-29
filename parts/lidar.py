@@ -2,6 +2,7 @@ import velodyne_decoder as vd
 import dpkt
 import socket
 import time
+import threading
 import open3d as o3d
 import numpy as np
 import cv2
@@ -13,6 +14,9 @@ HEIGHT_RANGE = (-.25, 2)            # Only include points between values in mete
 
 # --- Constants that should not change ---
 PORT = 2368                         # Default port for Velodyne LiDAR sensors
+
+# --- Visualization ---
+VISUALIZATION = True
 
 
 class Lidar():
@@ -27,60 +31,77 @@ class Lidar():
 
         print(f"Listening for Velodyne data on port {PORT}...")
 
-        # VISUAL - Initialize Open3D visualizer
-        self.vis = o3d.visualization.Visualizer()
-        self.vis.create_window('Lidar 3D View')
+        if VISUALIZATION:
+            # VISUAL - Initialize Open3D visualizer
+            self.vis = o3d.visualization.Visualizer()
+            self.vis.create_window('Lidar 3D View')
 
-        self.pcd = o3d.geometry.PointCloud()
-        self.first_scan = True
+            self.pcd = o3d.geometry.PointCloud()
+            self.first_scan = True
 
     def run(self):
-        print("Starting Lidar module...")
-        data, address = self.sock.recvfrom(2048)
-        stamp = time.time()
-        scan = self.decoder.decode(stamp, data)
+        # Drain all buffered packets and use the latest complete scan.
+        # The VLP-16 sends many UDP packets per revolution; we need to
+        # consume them all to avoid falling behind and seeing a rotating slice.
+        self.sock.setblocking(False)
+        latest_points = None
 
-        if scan is None:
+        while True:
+            try:
+                data, address = self.sock.recvfrom(2048)
+            except BlockingIOError:
+                break  # No more packets in the buffer
+            stamp = time.time()
+            scan = self.decoder.decode(stamp, data)
+            if scan is not None:
+                pts = scan[1]
+                if len(pts) > 0:
+                    latest_points = pts
+
+        self.sock.setblocking(True)
+
+        if latest_points is None:
             return
 
-        points = scan[1]
-        if len(points) == 0: return
+        points = latest_points
 
         occ_grid = self.create_occupancy_grid(points, GRID_RES, GRID_RANGE)
         
         # VISUAL - updates the occupancy grid visualizer
-        self.visualize_pro_occupancy_grid(occ_grid)
+        if VISUALIZATION:
+            self.visualize_pro_occupancy_grid(occ_grid)
         
         new_pcd = self.create_point_cloud(points)
-        self.pcd.points = new_pcd.points
 
         # VISUAL - updates the OPEN3D visualizer
-        self.pcd.colors = new_pcd.colors
-        if self.first_scan:
-            self.vis.add_geometry(self.pcd)
-            self.first_scan = False
-            
-            # Set a fixed view (looking down from above)
-            ctr = self.vis.get_view_control()
-            ctr.set_front([0, 0, 1])
-            ctr.set_up([0, 1, 0])
-            ctr.set_lookat([0, 0, 0])
-            ctr.set_zoom(0.3)
-            
-            print("First scan received, visualizer initialized.")
-            print(np.asarray(self.pcd.points)[:5])
-        else:
-            self.vis.update_geometry(self.pcd)
+        if VISUALIZATION:
+            self.pcd.points = new_pcd.points
+            self.pcd.colors = new_pcd.colors
+            if self.first_scan:
+                self.vis.add_geometry(self.pcd)
+                self.first_scan = False
+                
+                # Set a fixed view (looking down from above)
+                ctr = self.vis.get_view_control()
+                ctr.set_front([0, 0, 1])
+                ctr.set_up([0, 1, 0])
+                ctr.set_lookat([0, 0, 0])
+                ctr.set_zoom(0.3)
+                
+                print("First scan received, visualizer initialized.")
+                print(np.asarray(self.pcd.points)[:5])
+            else:
+                self.vis.update_geometry(self.pcd)
 
-        # VISUAL - Show a new frame in the OPEN3D visualizer
-        self.vis.poll_events()
-        self.vis.update_renderer()
+            # VISUAL - Show a new frame in the OPEN3D visualizer
+            self.vis.poll_events()
+            self.vis.update_renderer()
 
-        if not self.vis.poll_events():
-            return
+            if not self.vis.poll_events():
+                return
 
 
-    def create_occupancy_grid(points, resolution, grid_range):
+    def create_occupancy_grid(self, points, resolution, grid_range):
         """
         Translates world coordinates to a 2D occupancy grid.
         Formula: $index = \lfloor \frac{point + range}{resolution} \rfloor$
@@ -110,7 +131,7 @@ class Lidar():
 
         return grid
 
-    def create_point_cloud(points):
+    def create_point_cloud(self, points):
         """Standard O3D PointCloud creation with intensity coloring."""
         xyz = points[:, :3].copy()
         xyz[:, 2] = 0 # Flatten points to 2D plane for visualization
@@ -129,8 +150,8 @@ class Lidar():
 
     
 
-'''
-    def visualize_pro_occupancy_grid(grid):
+
+    def visualize_pro_occupancy_grid(self, grid):
         # 1. Setup Canvas
         display_size = (800, 800)
         # Convert grayscale to BGR for colored markers
@@ -162,4 +183,3 @@ class Lidar():
         resized = cv2.resize(color_grid, display_size, interpolation=cv2.INTER_NEAREST)
         cv2.imshow("Occupancy Grid (with Scale)", cv2.flip(resized, 0))
         cv2.waitKey(1)
-'''
