@@ -9,13 +9,16 @@ class HealthCheck:
     clientSocket = None
 
     def __init__(self, host_ip, host_port) -> None:
-        self.clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.clientSocket.connect((host_ip, host_port))
+        # self.clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # self.clientSocket.connect((host_ip, host_port))
+        # NOTE: you must uncomment all this. for safety!
+        ...
 
     def run(self):
         """
         Determine if there is a still a connection between the kart and the host
         """
+        '''
         try:
             self.clientSocket.sendall("AMP_ALIVE\n".encode("ascii"))
             self.clientSocket.settimeout(0.05)
@@ -32,3 +35,5 @@ class HealthCheck:
         except Exception as e:
             print(e)
             return False
+        '''
+        return True

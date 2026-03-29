@@ -26,22 +26,23 @@ class Logger():
         # Writing the fields
         self.csvwriter.writerow(fields)
         
-    def run(self, image, segmentedImage, centroid, steering, throttle):
+    def run(self):
         """
         Logs the current image, segmented Image, centroid, steering, and throttle values.
         Saves the images in their respective directory and logs the image paths and other data into a CSV.
         """
-        if image is not None and segmentedImage is not None:
-            timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S.%f')
-            image_file = self.image_directory +"/"+ timestamp + ".jpg"
-            segmented_file = self.segmented_directory + "/" + timestamp + ".jpg"            
+        print("HERE")
+        # if image is not None and segmentedImage is not None:
+        #     timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S.%f')
+        #     image_file = self.image_directory +"/"+ timestamp + ".jpg"
+        #     segmented_file = self.segmented_directory + "/" + timestamp + ".jpg"            
 
-            # Save the images if written is successful
-            success_image = cv2.imwrite(image_file, image.copy())
-            success_segmented = cv2.imwrite(segmented_file, segmentedImage.copy())
-            if success_image and success_segmented:
-                rows = [timestamp, image_file, segmented_file, centroid, steering, throttle]    
-                self.csvwriter.writerow(rows)
+        #     # Save the images if written is successful
+        #     success_image = cv2.imwrite(image_file, image.copy())
+        #     success_segmented = cv2.imwrite(segmented_file, segmentedImage.copy())
+        #     if success_image and success_segmented:
+        #         rows = [timestamp, image_file, segmented_file, centroid, steering, throttle]    
+        #         self.csvwriter.writerow(rows)
             
             
         

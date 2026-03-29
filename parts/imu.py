@@ -9,7 +9,7 @@ class IMU:
     gx, gy, gz, ax, ay, az
     gz = yaw rate (deg/s)
     """
-    def __init__(self, port="/dev/ttyACM1", baud=115200, debug=False):
+    def __init__(self, port="/dev/ttyACM0", baud=115200, debug=False):
         self.port = port
         self.baud = baud
         self.debug = debug
@@ -33,29 +33,37 @@ class IMU:
 
         line = self.ser_io.readline().strip()
         self.iter += 1
-        if self.iter % 10 == 0:
-            print(f"DEBUG: line={line}")
+        #if self.iter % 10 == 0:
+           #print(f"DEBUG: line={line}")
         if not line:
             return self.yaw_rate, self.yaw
-
+        ax = 0
+        ay = 0
+        ox = 0
+        gx = 0
+        print("here")
         try:
             parts = [p.strip() for p in line.split(",")]
+            print(line)
+            print(parts)
             parts = [p[3:] if ":" in p else p for p in parts]  # remove 'gx=', etc.
 
-            #print(parts)
-            ax, ay, az, gx, gy, gz = [float(v) for v in parts]
+            print(parts)
+            ox, oy, oz, gx, gy, gz, ax, ay, az = [float(v) for v in parts]
+            print(f"yaw: {ox} x accel: {ax} y accel: {ay}")
 
-            #self.yaw_rate = math.radians(gz)
-            #self.yaw = math.radians(az)
-            self.yaw_rate = gz
-            self.yaw = az
+            self.yaw_rate = gx
+            self.yaw = ox
 
-            if self.debug:
-                print(f"Yaw rate: {self.yaw_rate:.4f} rad/s")
+            #if self.debug:
+            #    print(f"Yaw rate: {self.yaw_rate:.4f} rad/s")
 
         except Exception as e:
-            if self.debug:
-                print(f"[IMUPart] Parse error: {e} | Line: {line}")
+            print(f"[IMUPart] Parse error: {e} | Line: {line}")
 
-        #print(f"yaw_rate={self.yaw_rate}, yaw={self.yaw}")
-        return self.yaw_rate, self.yaw
+        #if (abs(self.yaw_rate) > 0.01):
+       # if self.iter % 30 == 0:
+           #print(f"yaw_rate={self.yaw_rate}, yaw={self.yaw}")
+        #return self.yaw_rate, self.yaw
+
+        return ax, ay, ox, gx

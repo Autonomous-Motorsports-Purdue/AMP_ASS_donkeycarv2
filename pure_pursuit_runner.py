@@ -10,17 +10,21 @@ from parts.logger import Logger
 from parts.frame_publisher import Frame_Publisher
 from parts.segment_model import Segment_Model
 from parts.pure_pursuit import Pure_Pursuit
+from parts.gps import GNSSCLIStreamer
+from parts.imu import IMU
 
 if __name__ == "__main__":
     # web controller
     V = dk.vehicle.Vehicle()
     heartbeat= HealthCheck("192.168.1.100", 6000) # aryamaan has ip 100
     V.add(heartbeat, inputs=[], outputs=["safety/heartbeat"])
-    V.add(Pure_Pursuit(1.000506), inputs=["waypoint"], outputs=["controls/steering","controls/throttle"])
+    V.add(Pure_Pursuit(1.000506), inputs=[], outputs=["controls/steering","controls/throttle"])
+    V.add(GNSSCLIStreamer(), inputs=[], outputs=["lat", "lon", "alt", "fix", "age"])
+    # V.add(IMU(), inputs=[], outputs=["ax", "ay", "ox", "gx"])
     #V.add(Frame_Publisher(), outputs=['sensors/ZED/RGB/left', 'sensors/ZED/RGB/right'], threaded=False)
     #V.add(Segment_Model(), inputs=['sensors/ZED/RGB/left'], outputs=['perception/segmentedTrack', 'centroid','controls/steering', 'controls/throttle'])
     #V.add(LaneDetect(), inputs=['sensors/ZED/RGB/left', ' ', ' '], outputs=['points', 'perception/segmentedTrack'], threaded=False)
-    #V.add(Logger(), inputs=['sensors/ZED/RGB/left', 'perception/segmentedTrack', 'centroid', 'controls/steering', 'controls/throttle'], threaded=False)
+    V.add(Logger(), inputs=[], threaded=False)
     
     #controller = LocalWebController()
     # web controller just expects all these things even though they don't exist
@@ -40,7 +44,7 @@ if __name__ == "__main__":
     """
 
     # uart controller
-    uart = UART_backup_driver("/dev/ttyACM0")
+    uart = UART_backup_driver("/dev/ttyACM1")
     V.add(
         uart,
         inputs=["controls/throttle", "controls/steering", "safety/heartbeat"],

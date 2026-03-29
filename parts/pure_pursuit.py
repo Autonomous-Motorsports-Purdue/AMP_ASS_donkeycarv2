@@ -6,8 +6,8 @@ class Pure_Pursuit():
         self.speed_fast = 0.45
         self.speed_prev = self.speed_fast
 
-    def run(self, target_position):
-        targetx, targety, _ = target_position 
+    def run(self, ):
+        targetx, targety, _ = 10, -4, 0# target_position
         targety = -targety
         targetx += 0.6096 #Back wheels to camera
         targetx *= 0.75 # Constant for urgency
@@ -58,3 +58,4 @@ class Pure_Pursuit():
         ret_speed = self.speed
 
         return steering_value, ret_speed
+        # return 0, 0.4
