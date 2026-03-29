@@ -1,4 +1,4 @@
-import donkeycar.donkeycar as dk
+import donkeycar as dk
 import time
 
 from parts.fake_imu import FakeImu
