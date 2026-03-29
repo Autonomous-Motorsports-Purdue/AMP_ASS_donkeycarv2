@@ -25,7 +25,7 @@ class FakeGps:
         gps_rate=10,
         speed_mps=2.0,
         turn_radius_m=8.0,
-        gps_noise_std_m=1.5,
+        gps_noise_std_m= 1.0,
         seed=123,
     ):
         self.origin_lat = float(origin_lat)
