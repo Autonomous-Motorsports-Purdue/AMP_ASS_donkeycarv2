@@ -10,16 +10,14 @@ class EKFLocalizer:
     """
     DonkeyCar part: fuses GPS + IMU into [lat, lon, vx, vy] using an EKF.
 
-    IMPORTANT: ax, ay must be in the world (North/East) frame before passing in.
-    If your IMU gives body-frame accelerations, rotate them by heading first:
-        ax_world = ax_body * cos(heading) - ay_body * sin(heading)
-        ay_world = ax_body * sin(heading) + ay_body * cos(heading)
+    Expects IMU acceleration in body frame + yaw heading in degrees.
+    The part rotates accel into world East/North before prediction.
 
     Add to manage.py:
         from ekf_localizer import EKFLocalizer
         ekf = EKFLocalizer(init_lat=37.7749, init_lon=-122.4194)
         V.add(ekf,
-              inputs=['imu/accel_x', 'imu/accel_y', 'gps/lat', 'gps/lon'],
+              inputs=['imu/accel_x', 'imu/accel_y', 'imu/heading_deg', 'gps/lat', 'gps/lon'],
               outputs=['ekf/lat', 'ekf/lon', 'ekf/vx', 'ekf/vy'],
               threaded=True)
     """
@@ -113,10 +111,11 @@ class EKFLocalizer:
             Hx=self._h,
         )
 
-    def run(self, ax, ay, gps_lat, gps_lon):
+    def run(self, ax, ay, heading_deg, gps_lat, gps_lon):
         """
         Synchronous part.
-        ax, ay: world-frame acceleration in m/s^2 (East, North)
+        ax, ay: body-frame acceleration in m/s^2
+        heading_deg: yaw heading in degrees
         """
         now = time.monotonic()
         if self.last_predict_time is None:
@@ -126,14 +125,22 @@ class EKFLocalizer:
             dt = float(np.clip(dt, 1e-4, 0.2))
         self.last_predict_time = now
 
-        self._predict(ax or 0.0, ay or 0.0, dt)
+        heading_rad = np.radians(heading_deg or 0.0)
+        cos_h = np.cos(heading_rad)
+        sin_h = np.sin(heading_rad)
+        ax_body = ax or 0.0
+        ay_body = ay or 0.0
+        ax_world = ax_body * cos_h - ay_body * sin_h
+        ay_world = ax_body * sin_h + ay_body * cos_h
+
+        self._predict(ax_world, ay_world, dt)
         if gps_lat is not None and gps_lon is not None:
             self._update_gps(gps_lat, gps_lon)
         self.lat, self.lon, self.vx, self.vy = self.ekf.x
         return self.lat, self.lon, self.vx, self.vy
 
-    def run_threaded(self, ax, ay, gps_lat, gps_lon):
-        return self.run(ax, ay, gps_lat, gps_lon)
+    def run_threaded(self, ax, ay, heading_deg, gps_lat, gps_lon):
+        return self.run(ax, ay, heading_deg, gps_lat, gps_lon)
 
     def update(self):
         while self.running:

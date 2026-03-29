@@ -5,13 +5,14 @@ import numpy as np
 
 class FakeImu:
     """
-    Donkeycar part that simulates world-frame IMU acceleration.
+    Donkeycar part that simulates body-frame IMU acceleration and yaw.
 
     Outputs:
-        imu/accel_x, imu/accel_y
+        imu/accel_x, imu/accel_y, imu/heading_deg
 
     Notes:
-    - Acceleration is in world East/North frame to match EKFLocalizer.
+    - Acceleration output is body-frame (x-forward, y-left).
+    - Heading output is yaw in degrees from East, CCW positive.
     - Motion is a constant-speed circle to produce non-zero dynamics.
     """
 
@@ -39,6 +40,7 @@ class FakeImu:
 
         self.accel_x = 0.0
         self.accel_y = 0.0
+        self.heading_deg = 0.0
         self.x_east = self.turn_radius_m
         self.y_north = 0.0
 
@@ -50,15 +52,24 @@ class FakeImu:
         self.y_north = self.turn_radius_m * np.sin(self.theta)
 
         # World-frame centripetal acceleration.
-        ax_true = -self.speed_mps * self.yaw_rate * np.cos(self.theta)
-        ay_true = -self.speed_mps * self.yaw_rate * np.sin(self.theta)
+        ax_world = -self.speed_mps * self.yaw_rate * np.cos(self.theta)
+        ay_world = -self.speed_mps * self.yaw_rate * np.sin(self.theta)
+        heading_rad = self.theta + (np.pi / 2.0)
+        heading_deg = np.degrees(heading_rad) % 360.0
 
-        ax_meas = ax_true + self.rng.normal(0.0, self.accel_noise_std)
-        ay_meas = ay_true + self.rng.normal(0.0, self.accel_noise_std)
+        # Rotate world acceleration into body frame.
+        cos_h = np.cos(heading_rad)
+        sin_h = np.sin(heading_rad)
+        ax_body = ax_world * cos_h + ay_world * sin_h
+        ay_body = -ax_world * sin_h + ay_world * cos_h
+
+        ax_meas = ax_body + self.rng.normal(0.0, self.accel_noise_std)
+        ay_meas = ay_body + self.rng.normal(0.0, self.accel_noise_std)
 
         with self.lock:
             self.accel_x = float(ax_meas)
             self.accel_y = float(ay_meas)
+            self.heading_deg = float(heading_deg)
 
     def update(self):
         next_tick = time.monotonic()
@@ -77,7 +88,7 @@ class FakeImu:
 
     def run_threaded(self):
         with self.lock:
-            return self.accel_x, self.accel_y
+            return self.accel_x, self.accel_y, self.heading_deg
 
     def run(self):
         return self.run_threaded()
