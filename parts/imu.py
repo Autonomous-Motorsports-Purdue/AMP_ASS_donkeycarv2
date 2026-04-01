@@ -15,6 +15,8 @@ class IMU:
         self.debug = debug
         self.yaw_rate = 0.0
         self.yaw = 0.0
+        self.ax = 0.0
+        self.ay = 0.0
 
         try:
             self.ser = serial.Serial(self.port, self.baud, timeout=1)
@@ -42,6 +44,8 @@ class IMU:
             self.yaw_rate = math.radians(gz)
             self.yaw = math.radians(az)
 
+            self.ax, self.ay = ax, ay
+
             if self.debug:
                 print(f"Yaw rate: {self.yaw_rate:.4f} rad/s")
 
@@ -49,4 +53,4 @@ class IMU:
             if self.debug:
                 print(f"[IMUPart] Parse error: {e} | Line: {line}")
 
-        return self.yaw_rate, self.yaw
+        return self.yaw_rate, self.yaw, self.ax, self.ay

@@ -209,7 +209,7 @@ class MPC_Part:
         print("[MPC_Part] Shutting down")
 
 
-class AngVel_To_Steering_PID:
+class ClosedLoopController:
     """
     PID controller to convert desired angular velocity to steering.
     Takes desired angular velocity from MPC and actual angular velocity from IMU,
