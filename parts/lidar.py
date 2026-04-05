@@ -18,38 +18,8 @@ class Lidar():
         self.sock.bind(('', port))
 
         print(f"Listening for Velodyne data on port {port}...")
-
-    def run(self):
-        # Drain all buffered packets and use the latest complete scan.
-        # The VLP-16 sends many UDP packets per revolution; we need to
-        # consume them all to avoid falling behind and seeing a rotating slice.
-        self.sock.setblocking(False)
-        latest_points = None
-
-        while True:
-            try:
-                data, address = self.sock.recvfrom(2048)
-            except BlockingIOError:
-                break  # No more packets in the buffer
-            stamp = time.time()
-            scan = self.decoder.decode(stamp, data)
-            if scan is not None:
-                pts = scan[1]
-                if len(pts) > 0:
-                    latest_points = pts
-
-        self.sock.setblocking(True)
-
-        if latest_points is None:
-            return
-
-        points = latest_points
-
-        occ_grid = self._create_occupancy_grid(points, resolution, grid_range, height_range)
-        return occ_grid, points
-       
-
-    def _create_occupancy_grid(self, points, resolution, grid_range, height_range):
+        
+def _create_occupancy_grid(self, points, resolution, grid_range, height_range):
         """
         Translates world coordinates to a 2D occupancy grid.
         Formula: index = floor((point + range) / resolution)
@@ -78,3 +48,36 @@ class Lidar():
         grid[grid_y, grid_x] = 1  # 1 for binary data (Occupied)
 
         return grid
+    
+    def run(self, resolution=0.1, grid_range=29, height_range=(-.25,2)):
+        # Drain all buffered packets and use the latest complete scan.
+        # The VLP-16 sends many UDP packets per revolution; we need to
+        # consume them all to avoid falling behind and seeing a rotating slice.
+        self.sock.setblocking(False)
+        latest_points = None
+
+        while True:
+            try:
+                data, address = self.sock.recvfrom(2048)
+            except BlockingIOError:
+                break  # No more packets in the buffer
+            stamp = time.time()
+            scan = self.decoder.decode(stamp, data)
+            if scan is not None:
+                pts = scan[1]
+                if len(pts) > 0:
+                    latest_points = pts
+
+        self.sock.setblocking(True)
+
+        if latest_points is None:
+            return
+
+        points = latest_points
+
+        occ_grid = self._create_occupancy_grid(points, resolution, grid_range, height_range)
+        #Returns 2D occupancy grid with 1 and 0 values, and the points data with x,y,z,intensity values for each point
+        return occ_grid, points
+       
+
+    
