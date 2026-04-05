@@ -20,10 +20,8 @@ class Lidar():
         print(f"Listening for Velodyne data on port {port}...")
         
 def _create_occupancy_grid(self, points, resolution, grid_range, height_range):
-        """
-        Translates world coordinates to a 2D occupancy grid.
-        Formula: index = floor((point + range) / resolution)
-        """
+        #Translates world coordinates to a 2D occupancy grid.
+    
         # 1. Height filtering (Ignore ground and ceiling)
         mask_z = (points[:, 2] > height_range[0]) & (points[:, 2] < height_range[1])
         points = points[mask_z]
