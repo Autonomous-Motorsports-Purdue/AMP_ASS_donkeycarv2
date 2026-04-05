@@ -198,12 +198,13 @@ class MPC_Part:
                           (self.path[:, 1] - gps_y)**2)
         closest_idx = np.argmin(distances)
         
-        try:
-            desired_ang_vel, target_speed = self.mpc.run(vehicle, self.path, closest_idx)
-            return desired_ang_vel, target_speed
-        except Exception as e:
-            print(f"[MPC_Part] Error in control loop: {e}")
-            return 0.0, 0.0
+        # try:
+        desired_ang_vel, target_speed = self.mpc.run(vehicle, self.path, closest_idx)
+        print(f"MPC_Part:desired_ang_vel:{desired_ang_vel}, targert_speed:{target_speed}")
+        return desired_ang_vel, target_speed
+        # except Exception as e:
+        #     print(f"[MPC_Part] Error in control loop: {e}")
+        #     return 0.0, 0.0
     
     def shutdown(self):
         print("[MPC_Part] Shutting down")

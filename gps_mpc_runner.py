@@ -55,17 +55,17 @@ if __name__ == "__main__":
 
     # MPC Controller
     csv_xy_path = args.file_name.split('.')[0] + "_xy" + ".csv"
-    mpc_controller = MPC_Part(path_csv=csv_xy_path, horizon=2.0, dt_mpc=0.1, wheelbase=1.000506, max_steer=np.radians(35))
-    V.add(mpc_controller, inputs=["x", "y", "yaw"], outputs=["controls/desired_yaw_rate", "controls/desired_throttle"], threaded=True)
+    mpc_controller = MPC_Part(path_csv=csv_xy_path, horizon=2, dt_mpc=0.1, wheelbase=1.000506, max_steer=np.radians(35))
+    V.add(mpc_controller, inputs=["x", "y", "yaw"], outputs=["controls/desired_yaw_rate", "controls/desired_throttle"], threaded=False)
 
     # Closed loop IMU controller
     closed_loop_controller = ClosedLoopController(
         kp=0.5, ki=0.0, kd=0.0, # TODO: Tune these parameters.
         wheelbase=1.000506, max_steering_deg=35, steering_scale=1/35.0
     )
-    V.add(closed_loop_controller, inputs=["controls/desired_yaw_rate", "yaw_rate", "controls/desired_throttle"], outputs=["controls/steering", "controls/throttle"], threaded=True)
+    V.add(closed_loop_controller, inputs=["controls/desired_yaw_rate", "yaw_rate", "controls/desired_throttle"], outputs=["controls/steering", "controls/throttle"], threaded=False)
 
-    logger = Logger2()
-    V.add(logger, inputs=["lat", "lon", "v_x", "v_y", "yaw", "a_x", "a_y", "x", "y", "controls/throttle", "controls/steering"], outputs=[], threaded=False)
+    #logger = Logger2()
+    #V.add(logger, inputs=["lat", "lon", "v_x", "v_y", "yaw", "a_x", "a_y", "x", "y", "controls/throttle", "controls/steering"], outputs=[], threaded=False)
 
     V.start(rate_hz=100, max_loop_count=1000) # Remove this once we do more.

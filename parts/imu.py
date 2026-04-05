@@ -9,7 +9,7 @@ class IMU:
     gx, gy, gz, ax, ay, az
     gz = yaw rate (deg/s)
     """
-    def __init__(self, port="/dev/ttyUSB0", baud=115200, debug=False):
+    def __init__(self, port="/dev/ttyACM2", baud=115200, debug=True):
         self.port = port
         self.baud = baud
         self.debug = debug
@@ -33,8 +33,12 @@ class IMU:
             return self.yaw_rate, self.yaw
 
         line = self.ser_io.readline().strip()
+        if "cal" in line:
+            print("Recieved Calibration Packet, ret 0's")
+            return 0, 0, 0, 0
         if not line:
-            return self.yaw_rate, self.yaw
+            print("Error reading from IMU")
+            return self.yaw_rate, self.yaw, 0, 0
 
         try:
             parts = [p.strip() for p in line.split(",")]

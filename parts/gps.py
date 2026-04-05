@@ -21,7 +21,7 @@ from pygnssutils.helpers import parse_url
 class GPS:
     def __init__(self):
         # Receiver configuration.
-        self.serial_port = "COM7"
+        self.serial_port = "/dev/ttyACM1"
         self.baudrate = 9600
         self.timeout = 3
 

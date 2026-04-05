@@ -60,13 +60,21 @@ class UART_backup_driver:
             print("warming up kart -- not moving")
             self.reset_kart()
         self._iter += 1 # increment iteration. 
-        v = int(v * 255)  # throttle from -127 to 127
+
+        if s is None:
+            s = 0
+            print("s is None")
+        if v is None:
+            v = 0
+            print("v is None")
+        # v = int(v * 255)  # throttle from -127 to 127
+        v = 3000
 
         # steering is centered at 128
         s = int(s * 64)
 
         # clip throttle to (-100, 100)
-        v = max(-200, min(200, v))
+        # v = max(-200, min(200, v))
 
         print(f"Throttle: {v}, Steering: {s}")
 
