@@ -7,37 +7,17 @@ import open3d as o3d
 import numpy as np
 import cv2
 
-# --- Config ---
-GRID_RES = 0.1                      # Meters per cell
-GRID_RANGE = 20                     # Range of grid in meters (Total ~140m square grid for our VLP 16)
-HEIGHT_RANGE = (-.25, 2)            # Only include points between values in meters relative to the LiDAR
-
-# --- Constants that should not change ---
-PORT = 2368                         # Default port for Velodyne LiDAR sensors
-
-# --- Visualization ---
-VISUALIZATION = False
-
-
 class Lidar():
-    def __init__(self):
+    def __init__(self, port=2368, resolution=0.1, grid_range=20, height_range=(-.25, 2)):
         # Setup the decoder
-        self.config = vd.Config(min_range=0, max_range=GRID_RANGE)
+        self.config = vd.Config(min_range=0, max_range=grid_range)
         self.decoder = vd.StreamDecoder(self.config)
 
         # Setup the UDP socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind(('', PORT))
+        self.sock.bind(('', port))
 
-        print(f"Listening for Velodyne data on port {PORT}...")
-
-        if VISUALIZATION:
-            # VISUAL - Initialize Open3D visualizer
-            self.vis = o3d.visualization.Visualizer()
-            self.vis.create_window('Lidar 3D View')
-
-            self.pcd = o3d.geometry.PointCloud()
-            self.first_scan = True
+        print(f"Listening for Velodyne data on port {port}...")
 
     def run(self):
         # Drain all buffered packets and use the latest complete scan.
@@ -65,17 +45,17 @@ class Lidar():
 
         points = latest_points
 
-        occ_grid = self.create_occupancy_grid(points, GRID_RES, GRID_RANGE)
+        occ_grid = self._create_occupancy_grid(points, resolution, grid_range, height_range)
         return occ_grid, points
        
 
-    def create_occupancy_grid(self, points, resolution, grid_range):
+    def _create_occupancy_grid(self, points, resolution, grid_range, height_range):
         """
         Translates world coordinates to a 2D occupancy grid.
-        Formula: $index = \lfloor \frac{point + range}{resolution} \rfloor$
+        Formula: index = floor((point + range) / resolution)
         """
         # 1. Height filtering (Ignore ground and ceiling)
-        mask_z = (points[:, 2] > HEIGHT_RANGE[0]) & (points[:, 2] < HEIGHT_RANGE[1])
+        mask_z = (points[:, 2] > height_range[0]) & (points[:, 2] < height_range[1])
         points = points[mask_z]
 
         # 2. Spatial filtering (X and Y bounds)
