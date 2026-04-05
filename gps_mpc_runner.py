@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
     # EKF Localizer
     ekf_localizer = EKFLocalizer(init_lat=ref_lat0, init_lon=ref_lon0, imu_rate=10, gps_rate=4)
-    V.add(ekf_localizer, inputs=["a_x", "a_y", "yaw", "lat_raw", "lon_raw"], outputs=["lat", "lon", "v_x", "v_y"], threaded=True)
+    V.add(ekf_localizer, inputs=["a_x", "a_y", "yaw", "lat_raw", "lon_raw"], outputs=["lat", "lon", "v_x", "v_y"], threaded=False)
 
     # GPS to XY
     gps_to_xy = GPS_to_xy(ref_lat_deg=ref_lat0, ref_lon_deg=ref_lon0) # BIDC as origin

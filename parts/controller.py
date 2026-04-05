@@ -165,7 +165,7 @@ class MPC_Part:
     def _load_path(self, filename):
         
         try:
-            df = pd.read_csv(filename, sep=';', skiprows=2)
+            df = pd.read_csv(filename)
             df.columns = df.columns.str.strip()
             df.rename(columns={'x_m':'x', 'y_m':'y'}, inplace=True)
             path = df[['x', 'y', 'psi_rad']].to_numpy()

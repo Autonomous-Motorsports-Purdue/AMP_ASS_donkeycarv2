@@ -18,7 +18,11 @@ def convert_gps_to_xy(gps_file_name):
     lat0 = data[0,0]
     lon0 = data[0,1]
     x_coords, y_coords = latlon_to_local_m(data[:,0], data[:,1], lat0, lon0)
-    coords = np.stack((x_coords, y_coords), axis=1)
+    psi_rad = 0 * np.ones(len(x_coords))
+    # w_right = 0.5 * np.ones(len(x_coords))
+    # w_left = 0.5 * np.ones(len(y_coords))
+    # coords = np.stack((x_coords, y_coords, w_right, w_left), axis=1)
+    coords = np.stack((x_coords, y_coords, psi_rad), axis=1)
     new_file = gps_file_name.split('.')[0] + "_xy" + ".csv"
     np.savetxt(new_file, coords, delimiter=',', fmt="%f")
     print(coords)
