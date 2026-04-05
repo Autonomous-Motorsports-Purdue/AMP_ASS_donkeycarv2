@@ -7,6 +7,7 @@ from parts.controller import MPC_Part, ClosedLoopController
 from parts.ekf_localizer import EKFLocalizer
 from parts.gps_to_xy import GPS_to_xy
 from parts.logger2 import Logger2
+from parts.health_check import HealthCheck
 
 import numpy as np
 
@@ -16,13 +17,25 @@ checklist if not working
 1. verify IMU, GPS, Main PCB UART are plugged in.
 2. verify ports for each. should be /dev/tty* or /dev/usb*. unplug to test
 '''
-
+import argparse
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file_name", help="gps waypoint csv file name")
+    args = parser.parse_args()
+
+    data = np.genfromtxt(args.file_name, delimiter=',', skip_header=1, dtype=float, encoding='utf-8')
+    ref_lat0 = data[0,0]
+    ref_lon0 = data[0,1]
+
     V = dk.vehicle.Vehicle()
+
+    # Heart beat
+    heartbeat= HealthCheck("192.168.12.25", 6000) # aryamaan has ip 100
+    V.add(heartbeat, inputs=[], outputs=["safety/heartbeat"])
 
     # UART driver
     uart = UART_backup_driver("/dev/ttyACM0")
-    V.add(uart, inputs=["controls/throttle", "controls/steering"], outputs=[], threaded=False)
+    V.add(uart, inputs=["controls/throttle", "controls/steering", "safety/heartbeat"], outputs=[], threaded=False)
 
     # IMU
     imu = IMU()
@@ -33,15 +46,16 @@ if __name__ == "__main__":
     V.add(GPS(), inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count'], threaded=True)
 
     # EKF Localizer
-    ekf_localizer = EKFLocalizer(init_lat=40.427281, init_lon=-86.918915, imu_rate=10, gps_rate=4)
+    ekf_localizer = EKFLocalizer(init_lat=ref_lat0, init_lon=ref_lon0, imu_rate=10, gps_rate=4)
     V.add(ekf_localizer, inputs=["a_x", "a_y", "yaw", "lat_raw", "lon_raw"], outputs=["lat", "lon", "v_x", "v_y"], threaded=True)
 
     # GPS to XY
-    gps_to_xy = GPS_to_xy(ref_lat_deg=40.427281, ref_lon_deg=-86.918915) # BIDC as origin
+    gps_to_xy = GPS_to_xy(ref_lat_deg=ref_lat0, ref_lon_deg=ref_lon0) # BIDC as origin
     V.add(gps_to_xy, inputs=["lat", "lon"], outputs=["x", "y"], threaded=False)
 
     # MPC Controller
-    mpc_controller = MPC_Part(path_csv=None, horizon=2.0, dt_mpc=0.1, wheelbase=1.000506, max_steer=np.radians(35))
+    csv_xy_path = args.file_name.split('.')[0] + "_xy" + ".csv"
+    mpc_controller = MPC_Part(path_csv=csv_xy_path, horizon=2.0, dt_mpc=0.1, wheelbase=1.000506, max_steer=np.radians(35))
     V.add(mpc_controller, inputs=["x", "y", "yaw"], outputs=["controls/desired_yaw_rate", "controls/desired_throttle"], threaded=True)
 
     # Closed loop IMU controller
