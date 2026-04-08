@@ -9,7 +9,7 @@ class IMU:
     gx, gy, gz, ax, ay, az
     gz = yaw rate (deg/s)
     """
-    def __init__(self, port="/dev/ttyACM2", baud=115200, debug=True):
+    def __init__(self, port="COM5", baud=115200, debug=False):
         self.port = port
         self.baud = baud
         self.debug = debug
@@ -30,23 +30,30 @@ class IMU:
     def run(self):
         """Read a line of 6 comma-separated IMU values and return yaw_rate."""
         if not self.ser_io:
-            return self.yaw_rate, self.yaw
+            return self.yaw_rate, self.yaw, 0, 0
 
         line = self.ser_io.readline().strip()
-        if "cal" in line:
+        cal = self.ser_io.readline().strip()
+        newline = self.ser_io.readline().strip()    
+        # print(f"Raw IMU line: '{line}'")  # Debug print of raw line
+        # print(f"Raw IMU cal line: '{cal}'")  # Debug print of calibration line
+        # print(f"Raw IMU newline: '{newline}'")  # Debug print of newline
+        if "Cal" in line:
             print("Recieved Calibration Packet, ret 0's")
+            # print(f"Received calibration packet: {line}")
             return 0, 0, 0, 0
         if not line:
             print("Error reading from IMU")
             return self.yaw_rate, self.yaw, 0, 0
-
         try:
             parts = [p.strip() for p in line.split(",")]
-            parts = [p[3:] if "=" in p else p for p in parts]  # remove 'gx=', etc.
-            ax, ay, az, gx, gy, gz = [float(v) for v in parts]
+            # print(f"Raw IMU parts: {parts}")
+            parts = [p[3:] if ":" in p else p for p in parts]  # remove 'gx=', etc.
+            # print(f"Parsed IMU parts: {parts}")
+            ox, oy, oz, gx, gy, gz, ax, ay, az = [float(v) for v in parts]
 
             self.yaw_rate = math.radians(gz)
-            self.yaw = math.radians(az)
+            self.yaw = math.radians(ox)
 
             self.ax, self.ay = ax, ay
 
@@ -57,4 +64,5 @@ class IMU:
             if self.debug:
                 print(f"[IMUPart] Parse error: {e} | Line: {line}")
 
+        # print(f"Returning IMU values: yaw_rate={self.yaw_rate:.4f}, yaw={self.yaw:.4f}, ax={self.ax:.4f}, ay={self.ay:.4f}")
         return self.yaw_rate, self.yaw, self.ax, self.ay
