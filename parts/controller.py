@@ -1,9 +1,9 @@
 import math
+import time
+
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.optimize import minimize
-import time
 
 # ================= Kinematic Model =================
 class KinematicBicycleModel:
@@ -70,6 +70,21 @@ class MPC_Controller:
         return angular_velocity, self.target_speed
 
 # ================= Utilities =================
+def load_xy_path(filename):
+    df = pd.read_csv(filename)
+    df.columns = [str(column).strip() for column in df.columns]
+    df.rename(columns={"x_m": "x", "y_m": "y"}, inplace=True)
+
+    if {"x", "y", "psi_rad"}.issubset(df.columns):
+        return df[["x", "y", "psi_rad"]].to_numpy(dtype=float)
+
+    df = pd.read_csv(filename, header=None)
+    if df.shape[1] < 3:
+        raise ValueError(f"Expected at least 3 columns in {filename}, found {df.shape[1]}.")
+
+    return df.iloc[:, :3].to_numpy(dtype=float)
+
+
 def create_path_csv(filename):
     df = pd.read_csv(filename, sep=';', skiprows=2)
     df.columns = df.columns.str.strip()
@@ -92,6 +107,8 @@ def get_initial_state(path):
 
 # ================= Simulation =================
 def simulate_mpc(csv_file):
+    import matplotlib.pyplot as plt
+
     start = time.time()
     dt_sim = 0.01
     total_time = 200        # smaller for testing
@@ -149,10 +166,12 @@ class MPC_Part:
     DonkeyCar part wrapper for MPC controller.
     Takes GPS position and yaw, outputs desired angular velocity.
     """
-    def __init__(self, path_csv, horizon, dt_mpc, wheelbase, max_steer):
-        
+    def __init__(self, path_csv, horizon, dt_mpc, wheelbase, max_steer, verbose=True):
         self.path = self._load_path(path_csv)
-        
+        if len(self.path) < 2:
+            raise ValueError(f"[MPC_Part] Path must contain at least 2 waypoints: {path_csv}")
+        self.verbose = verbose
+
         self.mpc = MPC_Controller(
             horizon=horizon,
             dt_mpc=dt_mpc,
@@ -160,19 +179,11 @@ class MPC_Part:
             max_steer=max_steer
         )
         
-        print(f"[MPC_Part] Initialized with {len(self.path)} waypoints from {path_csv}")
+        if self.verbose:
+            print(f"[MPC_Part] Initialized with {len(self.path)} waypoints from {path_csv}")
         
     def _load_path(self, filename):
-        
-        try:
-            df = pd.read_csv(filename)
-            df.columns = df.columns.str.strip()
-            df.rename(columns={'x_m':'x', 'y_m':'y'}, inplace=True)
-            path = df[['x', 'y', 'psi_rad']].to_numpy()
-            return path
-        except Exception as e:
-            print(f"[MPC_Part] Error loading path from {filename}: {e}")
-            return np.array([[0, 0, 0], [10, 0, 0]])
+        return load_xy_path(filename)
     
     def run(self, gps_x, gps_y, yaw):
         """
@@ -181,7 +192,8 @@ class MPC_Part:
         """
 
         if gps_x is None or gps_y is None or yaw is None:
-            print("[MPC_Part] Waiting for valid GPS/yaw data...")
+            if self.verbose:
+                print("[MPC_Part] Waiting for valid GPS/yaw data...")
             return 0.0, 0.0
         
         class VehicleState:
@@ -200,14 +212,16 @@ class MPC_Part:
         
         # try:
         desired_ang_vel, target_speed = self.mpc.run(vehicle, self.path, closest_idx)
-        print(f"MPC_Part:desired_ang_vel:{desired_ang_vel}, targert_speed:{target_speed}")
+        if self.verbose:
+            print(f"MPC_Part:desired_ang_vel:{desired_ang_vel}, targert_speed:{target_speed}")
         return desired_ang_vel, target_speed
         # except Exception as e:
         #     print(f"[MPC_Part] Error in control loop: {e}")
         #     return 0.0, 0.0
     
     def shutdown(self):
-        print("[MPC_Part] Shutting down")
+        if self.verbose:
+            print("[MPC_Part] Shutting down")
 
 
 class ClosedLoopController:
@@ -217,7 +231,19 @@ class ClosedLoopController:
     from IMU, uses closed-loop feedback to output steering commands.
     """
 
-    def __init__(self, kp, ki, kd, wheelbase, steering_scale, max_steering_deg):
+    def __init__(
+        self,
+        kp,
+        ki,
+        kd,
+        wheelbase,
+        steering_scale,
+        max_steering_deg,
+        speed_to_throttle_scale=1.0,
+        max_throttle=1.0,
+        verbose=True,
+        fixed_dt=None,
+    ):
         
         self.kp = kp
         self.ki = ki
@@ -226,6 +252,13 @@ class ClosedLoopController:
         self.wheelbase = wheelbase
         self.steering_scale = steering_scale
         self.max_steering_deg = max_steering_deg
+        self.speed_to_throttle_scale = speed_to_throttle_scale
+        self.max_throttle = max_throttle
+        self.verbose = verbose
+        self.fixed_dt = fixed_dt
+
+        if self.steering_scale <= 0:
+            raise ValueError("steering_scale must be positive.")
         
         self.error_integral = 0.0
         self.last_error = 0.0
@@ -234,24 +267,30 @@ class ClosedLoopController:
         # upper limit for integral term to prevent integral from growing unbounded
         self.integral_limit = 10.0
         
-        print(f"[PID] Initialized with kp={kp}, ki={ki}, kd={kd}")
-        print(f"[PID] Steering: max={max_steering_deg}°, scale={steering_scale}")
+        if self.verbose:
+            print(f"[PID] Initialized with kp={kp}, ki={ki}, kd={kd}")
+            print(f"[PID] Steering: max={max_steering_deg}°, scale={steering_scale}")
+            print(f"[PID] Throttle: scale={speed_to_throttle_scale}, max={max_throttle}")
         
     def run(self, desired_ang_vel, actual_ang_vel, target_speed):
 
         if desired_ang_vel is None or actual_ang_vel is None or target_speed is None:
-            print("[PID] Waiting for valid inputs...")
+            if self.verbose:
+                print("[PID] Waiting for valid inputs...")
             return 0.0, 0.0
         
         error = desired_ang_vel - actual_ang_vel
         
-        current_time = time.time()
-        if self.last_time is None:
-            dt = 0.01 
+        if self.fixed_dt is not None:
+            dt = float(self.fixed_dt)
         else:
-            dt = current_time - self.last_time
-            dt = max(dt, 0.001)  
-        self.last_time = current_time
+            current_time = time.time()
+            if self.last_time is None:
+                dt = 0.01
+            else:
+                dt = current_time - self.last_time
+                dt = max(dt, 0.001)
+            self.last_time = current_time
         
         p_term = self.kp * error
         self.error_integral += error * dt
@@ -279,17 +318,25 @@ class ClosedLoopController:
         total_steering_deg = np.clip(total_steering_deg, -self.max_steering_deg, self.max_steering_deg)
         
         # Normalize
-        steering_value = total_steering_deg / self.steering_scale
+        steering_value = total_steering_deg * self.steering_scale
         steering_value = np.clip(steering_value, -1.0, 1.0)
         
-        throttle = target_speed
+        throttle = float(
+            np.clip(
+                target_speed * self.speed_to_throttle_scale,
+                -self.max_throttle,
+                self.max_throttle,
+            )
+        )
         
-        print(f"[PID] Desired: {desired_ang_vel:.3f} rad/s | "
-              f"Actual: {actual_ang_vel:.3f} rad/s | "
-              f"Error: {error:.3f} | "
-              f"P: {p_term:.3f} I: {i_term:.3f} D: {d_term:.3f} | "
-              f"FF: {feedforward_angle:.3f} rad | "
-              f"Steer: {steering_value:.3f}")
+        if self.verbose:
+            print(f"[PID] Desired: {desired_ang_vel:.3f} rad/s | "
+                  f"Actual: {actual_ang_vel:.3f} rad/s | "
+                  f"Error: {error:.3f} | "
+                  f"P: {p_term:.3f} I: {i_term:.3f} D: {d_term:.3f} | "
+                  f"FF: {feedforward_angle:.3f} rad | "
+                  f"Steer: {steering_value:.3f} | "
+                  f"Throttle: {throttle:.3f}")
         
         return steering_value, throttle
     
@@ -297,10 +344,12 @@ class ClosedLoopController:
         self.error_integral = 0.0
         self.last_error = 0.0
         self.last_time = None
-        print("[PID] State reset")
+        if self.verbose:
+            print("[PID] State reset")
     
     def shutdown(self):
-        print("[PID] Shutting down")
+        if self.verbose:
+            print("[PID] Shutting down")
 
 
 if __name__ == "__main__":
