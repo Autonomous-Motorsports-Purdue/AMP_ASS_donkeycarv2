@@ -1,7 +1,9 @@
 __pycache__/
+.venv/
 donkeycar_env/
 data/
 *.tar.gz
 *.whl
 images/
 *.png
+sim_outputs/

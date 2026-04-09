@@ -10,7 +10,8 @@ class EKFLocalizer:
     """
     DonkeyCar part: fuses GPS + IMU into [lat, lon, vx, vy] using an EKF.
 
-    Expects IMU acceleration in body frame + yaw heading in degrees.
+    Expects IMU acceleration in body frame plus a yaw heading in either
+    degrees or radians, depending on ``heading_unit``.
     The part rotates accel into world East/North before prediction.
 
     Add to manage.py:
@@ -22,11 +23,16 @@ class EKFLocalizer:
               threaded=True)
     """
 
-    def __init__(self, init_lat, init_lon, imu_rate=100, gps_rate=10):
+    def __init__(self, init_lat, init_lon, imu_rate=100, gps_rate=10, heading_unit="deg", fixed_dt=None):
         self.nominal_dt = 1.0 / imu_rate
         self.gps_rate = gps_rate
         self.running = True
         self.last_predict_time = None
+        self.heading_unit = heading_unit.lower()
+        self.fixed_dt = fixed_dt
+
+        if self.heading_unit not in {"deg", "rad"}:
+            raise ValueError(f"Unsupported heading_unit={heading_unit!r}. Use 'deg' or 'rad'.")
 
         # Outputs
         self.lat = init_lat
@@ -111,21 +117,31 @@ class EKFLocalizer:
             Hx=self._h,
         )
 
-    def run(self, ax, ay, heading_deg, gps_lat, gps_lon):
+    def _heading_to_radians(self, heading):
+        if heading is None:
+            return 0.0
+        if self.heading_unit == "rad":
+            return float(heading)
+        return float(np.radians(heading))
+
+    def run(self, ax, ay, heading, gps_lat, gps_lon):
         """
         Synchronous part.
         ax, ay: body-frame acceleration in m/s^2
-        heading_deg: yaw heading in degrees
+        heading: yaw heading in ``heading_unit``
         """
-        now = time.monotonic()
-        if self.last_predict_time is None:
-            dt = self.nominal_dt
+        if self.fixed_dt is not None:
+            dt = float(self.fixed_dt)
         else:
-            dt = now - self.last_predict_time
-            dt = float(np.clip(dt, 1e-4, 0.2))
-        self.last_predict_time = now
+            now = time.monotonic()
+            if self.last_predict_time is None:
+                dt = self.nominal_dt
+            else:
+                dt = now - self.last_predict_time
+                dt = float(np.clip(dt, 1e-4, 0.2))
+            self.last_predict_time = now
 
-        heading_rad = np.radians(heading_deg or 0.0)
+        heading_rad = self._heading_to_radians(heading)
         cos_h = np.cos(heading_rad)
         sin_h = np.sin(heading_rad)
         ax_body = ax or 0.0
@@ -139,8 +155,8 @@ class EKFLocalizer:
         self.lat, self.lon, self.vx, self.vy = self.ekf.x
         return self.lat, self.lon, self.vx, self.vy
 
-    def run_threaded(self, ax, ay, heading_deg, gps_lat, gps_lon):
-        return self.run(ax, ay, heading_deg, gps_lat, gps_lon)
+    def run_threaded(self, ax, ay, heading, gps_lat, gps_lon):
+        return self.run(ax, ay, heading, gps_lat, gps_lon)
 
     def update(self):
         while self.running:

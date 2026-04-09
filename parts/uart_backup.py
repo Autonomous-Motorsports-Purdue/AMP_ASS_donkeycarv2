@@ -3,13 +3,22 @@ import time
 
 
 class UART_backup_driver:
-    def __init__(self, port_name: str = "/dev/tty.usbserial-D30IDHO4"):
+    def __init__(
+        self,
+        port_name: str = "/dev/tty.usbserial-D30IDHO4",
+        warmup_iterations: int = 10,
+        throttle_scale: float = 127.0,
+        steering_scale: float = 64.0,
+    ):
         # configure the serial connections (the parameters differs on the device you are connecting to)
         self.ser = serial.Serial(port=port_name, baudrate=115200)
 
         self.curr_v = 0
         self.curr_s = 0
         self._iter = 0 # iteration counter. used to delay start.
+        self.warmup_iterations = warmup_iterations
+        self.throttle_scale = throttle_scale
+        self.steering_scale = steering_scale
 
     def update_velocity(
         self, new_v: int
@@ -56,10 +65,12 @@ class UART_backup_driver:
         if not alive:
             self.reset_kart()
             return
-        if self._iter < 10:
+        if self._iter < self.warmup_iterations:
             print("warming up kart -- not moving")
             self.reset_kart()
-        self._iter += 1 # increment iteration. 
+            self._iter += 1
+            return
+        self._iter += 1 # increment iteration.
 
         if s is None:
             s = 0
@@ -67,14 +78,10 @@ class UART_backup_driver:
         if v is None:
             v = 0
             print("v is None")
-        # v = int(v * 255)  # throttle from -127 to 127
-        v = 3000
+        v = int(v * self.throttle_scale)
 
         # steering is centered at 128
-        s = int(s * 64)
-
-        # clip throttle to (-100, 100)
-        # v = max(-200, min(200, v))
+        s = int(s * self.steering_scale)
 
         print(f"Throttle: {v}, Steering: {s}")
 
