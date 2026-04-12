@@ -18,6 +18,10 @@ KNOWN_GROUPS = [
     ("attT",          ["yaw", "pitch", "roll", "direct"],  "Attitude (Euler)",    "degrees"),
 ]
 
+# android tool required: adb, command to run before donkeycar: adb forward tcp:8080 tcp:8080
+# ios tool required: libusbmuxd, command to run before donkeycar: iproxy 8080:80
+
+# REMOTE ACCESS MUST BE ENABLED IN PHYPHOX APP TO RUN
 
 class PhoneSensors():
     def __init__(self, host="localhost", port=8080, poll_hz=60):
