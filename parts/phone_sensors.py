@@ -3,6 +3,7 @@ import requests
 from collections import deque
 
 BUFFER_SIZE = 200
+FLUSH_INTERVAL = 90
 
 KNOWN_GROUPS = [
     ("acc_time",      ["accX", "accY", "accZ"],           "Accelerometer",       "m/s²"),
@@ -27,6 +28,7 @@ class PhoneSensors():
     def __init__(self, host="localhost", port=8080, poll_hz=60):
         self.base_url = f"http://{host}:{port}"
 
+        self.session = requests.Session()
         print(f"Connecting to phyphox at {self.base_url} ...")
         self.groups = self._discover_buffers()
 
@@ -45,7 +47,7 @@ class PhoneSensors():
         self.thread.start()
 
     def _discover_buffers(self):
-        resp = requests.get(f"{self.base_url}/config", timeout=3)
+        resp = self.session.get(f"{self.base_url}/config", timeout=3)
         resp.raise_for_status()
         config = resp.json()
 
@@ -96,7 +98,7 @@ class PhoneSensors():
     def _fetch_all(self):
         url = self._build_url()
         try:
-            resp = requests.get(url, timeout=1)
+            resp = self.session.get(url, timeout=1)
             resp.raise_for_status()
             payload = resp.json()
         except requests.RequestException:
@@ -124,6 +126,8 @@ class PhoneSensors():
     def _poll_loop(self, hz):
         import time
         interval = 1.0 / hz
+        last_flush = time.time()
+        flush_interval = FLUSH_INTERVAL  # seconds
         while self.running:
             self._fetch_all()
             result = (
@@ -133,7 +137,22 @@ class PhoneSensors():
             )
             with self.lock:
                 self.latest = result
+            if time.time() - last_flush >= flush_interval:
+                threading.Thread(target=self._flush_and_reset, daemon=True).start()
+                last_flush = time.time()
             time.sleep(interval)
+    
+    def flush_phyphox_ram(self):
+        self.session.get(f"{self.base_url}/control?cmd=clear")
+        self.session.get(f"{self.base_url}/control?cmd=start")
+
+    def _flush_and_reset(self):
+        try:
+            self.flush_phyphox_ram()
+            for key in self.last_time:
+                self.last_time[key] = 0.0
+        except requests.RequestException:
+            pass
 
     def run(self):
         with self.lock:
