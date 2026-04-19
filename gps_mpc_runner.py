@@ -31,6 +31,7 @@ if __name__ == "__main__":
 
     # Heart beat
     heartbeat= HealthCheck("192.168.12.25", 6000) # aryamaan has ip 100
+    # just returns true rn
     V.add(heartbeat, inputs=[], outputs=["safety/heartbeat"])
 
     # UART driver
@@ -46,12 +47,14 @@ if __name__ == "__main__":
     V.add(GPS(), inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count'], threaded=True)
 
     # EKF Localizer
+    """
     ekf_localizer = EKFLocalizer(init_lat=ref_lat0, init_lon=ref_lon0, imu_rate=10, gps_rate=4)
     V.add(ekf_localizer, inputs=["a_x", "a_y", "yaw", "lat_raw", "lon_raw"], outputs=["lat", "lon", "v_x", "v_y"], threaded=False)
+    """
 
     # GPS to XY
     gps_to_xy = GPS_to_xy(ref_lat_deg=ref_lat0, ref_lon_deg=ref_lon0) # BIDC as origin
-    V.add(gps_to_xy, inputs=["lat", "lon"], outputs=["x", "y"], threaded=False)
+    V.add(gps_to_xy, inputs=["lat_raw", "lon_raw"], outputs=["x", "y"], threaded=False)
 
     # MPC Controller
     csv_xy_path = args.file_name.split('.')[0] + "_xy" + ".csv"

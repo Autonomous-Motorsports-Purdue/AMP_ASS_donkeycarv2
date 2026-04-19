@@ -9,7 +9,7 @@ class IMU:
     gx, gy, gz, ax, ay, az
     gz = yaw rate (deg/s)
     """
-    def __init__(self, port="COM5", baud=115200, debug=False):
+    def __init__(self, port="/dev/ttyACM1", baud=115200, debug=False):
         self.port = port
         self.baud = baud
         self.debug = debug
@@ -35,9 +35,9 @@ class IMU:
         line = self.ser_io.readline().strip()
         cal = self.ser_io.readline().strip()
         newline = self.ser_io.readline().strip()    
-        # print(f"Raw IMU line: '{line}'")  # Debug print of raw line
-        # print(f"Raw IMU cal line: '{cal}'")  # Debug print of calibration line
-        # print(f"Raw IMU newline: '{newline}'")  # Debug print of newline
+        print(f"Raw IMU line: '{line}'")  # Debug print of raw line
+        print(f"Raw IMU cal line: '{cal}'")  # Debug print of calibration line
+        print(f"Raw IMU newline: '{newline}'")  # Debug print of newline
         if "Cal" in line:
             print("Recieved Calibration Packet, ret 0's")
             # print(f"Received calibration packet: {line}")
@@ -57,12 +57,12 @@ class IMU:
 
             self.ax, self.ay = ax, ay
 
-            if self.debug:
-                print(f"Yaw rate: {self.yaw_rate:.4f} rad/s")
+            # if self.debug:
+                # print(f"Yaw rate: {self.yaw_rate:.4f} rad/s")
 
         except Exception as e:
             if self.debug:
                 print(f"[IMUPart] Parse error: {e} | Line: {line}")
 
-        # print(f"Returning IMU values: yaw_rate={self.yaw_rate:.4f}, yaw={self.yaw:.4f}, ax={self.ax:.4f}, ay={self.ay:.4f}")
+        print(f"Returning IMU values: yaw_rate={self.yaw_rate:.4f}, yaw={math.degrees(self.yaw):.4f}, ax={self.ax:.4f}, ay={self.ay:.4f}")
         return self.yaw_rate, self.yaw, self.ax, self.ay

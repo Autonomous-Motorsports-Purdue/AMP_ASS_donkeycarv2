@@ -32,6 +32,7 @@ class GPS_to_xy:
 
         x_east_m = dlon * self.cos_ref_lat * self.EARTH_RADIUS_M
         y_north_m = dlat * self.EARTH_RADIUS_M
+        print(f"GPS_to_xy: lat {lat_deg:.6f}, lon {lon_deg:.6f} -> x {x_east_m:.2f} m, y {y_north_m:.2f} m")
         return x_east_m, y_north_m
 
     def to_latlon(self, x_east_m: float, y_north_m: float):

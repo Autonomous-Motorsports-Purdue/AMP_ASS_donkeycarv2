@@ -30,7 +30,7 @@ class MPC_Controller:
         self.k_y = 1
         self.k_yaw = 0.75
         self.k_smooth = 0.25
-        self.target_speed = 7.5
+        self.target_speed = 2.0 # 7.5
 
     def normalize_angle(self, angle):
         return (angle + np.pi) % (2*np.pi) - np.pi
@@ -54,8 +54,9 @@ class MPC_Controller:
         for i, (x_pred, y_pred, yaw_pred) in enumerate(traj):
             idx = min(idx + 1, len(path)-1)
             x_ref, y_ref, yaw_ref = path[idx]
-            dyaw = self.normalize_angle(yaw_ref - yaw_pred)
-            cost += self.k_y * ((x_ref - x_pred)**2 + (y_ref - y_pred)**2) + self.k_yaw * dyaw**2
+            # dyaw = self.normalize_angle(yaw_ref - yaw_pred)
+            #cost += self.k_y * ((x_ref - x_pred)**2 + (y_ref - y_pred)**2) + self.k_yaw * dyaw**2
+            cost += self.k_y * ((x_ref - x_pred)**2 + (y_ref - y_pred)**2)  
             cost += self.k_smooth * (steering_sequence[i] - prev_steer)**2
             prev_steer = steering_sequence[i]
         return cost
@@ -81,6 +82,9 @@ def find_closest_point(path, x, y):
     return np.argmin(distances)
 
 def get_initial_state(path):
+    start_x = path[0,0]
+    start_y = path[0,1]
+    return start_x, start_y, 0
     n_segments = 5
     headings = [math.atan2(path[i+1,1]-path[i,1], path[i+1,0]-path[i,0]) for i in range(n_segments)]
     avg_heading = math.atan2(sum(math.sin(h) for h in headings),
@@ -279,8 +283,8 @@ class ClosedLoopController:
         total_steering_deg = np.clip(total_steering_deg, -self.max_steering_deg, self.max_steering_deg)
         
         # Normalize
-        steering_value = total_steering_deg / self.steering_scale
-        steering_value = np.clip(steering_value, -1.0, 1.0)
+        steering_value = total_steering_deg * self.steering_scale
+        steering_value = -1.0 * np.clip(steering_value, -1.0, 1.0) # Invert b.c angvel increments left, steer is right
         
         throttle = target_speed
         
