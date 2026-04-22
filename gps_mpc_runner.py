@@ -9,6 +9,8 @@ from parts.gps_to_xy import GPS_to_xy
 from parts.logger2 import Logger2
 from parts.health_check import HealthCheck
 
+from parts.gps_visualizer import GPSVisualizer
+
 import numpy as np
 
 '''
@@ -44,6 +46,10 @@ if __name__ == "__main__":
     # GPS
     gps = GPS()
     V.add(GPS(), inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count'], threaded=True)
+
+    # GPS Visualizer
+    gps_visualizer = GPSVisualizer()
+    V.add(gps_visualizer, inputs=['lat_raw', 'lon_raw', "yaw"], outputs=[], threaded=False)
 
     # EKF Localizer
     ekf_localizer = EKFLocalizer(init_lat=ref_lat0, init_lon=ref_lon0, imu_rate=10, gps_rate=4)

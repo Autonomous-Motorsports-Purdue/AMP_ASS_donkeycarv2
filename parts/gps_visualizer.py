@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import contextily as cx
+import math
 from collections import deque
 
 BUFFER_SIZE = 500
@@ -9,13 +10,13 @@ class GPSVisualizer:
     """
     Donkeycar part that plots GPS coordinates on a real map using contextily.
 
-    Inputs: lat_deg, lon_deg (raw GPS coordinates in degrees)
+    Inputs: lat_deg, lon_deg (raw GPS coordinates in degrees), yaw (radians)
     Outputs: none
 
     Usage:
         from parts.gps_visualizer import GPSVisualizer
 
-        V.add(GPSVisualizer(), inputs=['gps/lat', 'gps/lon'], outputs=[])
+        V.add(GPSVisualizer(), inputs=['lat_raw', 'lon_raw', 'yaw'], outputs=[])
     """
 
     def __init__(self, buffer_size=BUFFER_SIZE, tile_source=cx.providers.Esri.WorldImagery):
@@ -48,6 +49,7 @@ class GPSVisualizer:
     def _needs_tile_refresh(self, bounds):
         if self._cached_bounds is None:
             return True
+        
         # refresh if the current position is near the edge of the cached view
         lat_min, lat_max, lon_min, lon_max = self._cached_bounds
         lat, lon = list(self.lats)[-1], list(self.lons)[-1]
@@ -79,11 +81,11 @@ class GPSVisualizer:
                 zoom='auto',
             )
         except Exception:
-            pass  # offline or tile fetch failed — plot without map
+            pass
 
         self._cached_bounds = bounds
 
-    def run(self, lat_deg, lon_deg):
+    def run(self, lat_deg, lon_deg, yaw=0.0):
         if lat_deg is None or lon_deg is None:
             return
 
@@ -98,6 +100,26 @@ class GPSVisualizer:
 
         if self._needs_tile_refresh((min(lats), max(lats), min(lons), max(lons))):
             self._refresh_basemap()
+
+        theta = yaw
+        lat_span = max(max(lats) - min(lats), 1e-5)
+        lon_span = max(max(lons) - min(lons), 1e-5)
+        arrow_len = 0.08 * max(lat_span, lon_span)
+
+        dx = arrow_len * math.cos(theta)
+        dy = arrow_len * math.sin(theta)
+
+        if not hasattr(self, "yaw_arrow") or self.yaw_arrow is None:
+            self.yaw_arrow = self.ax.annotate(
+                "",
+                xy=(lons[-1] + dx, lats[-1] + dy),
+                xytext=(lons[-1], lats[-1]),
+                arrowprops=dict(arrowstyle="->", color="#ffd400", lw=2),
+                zorder=5,
+            )
+        else:
+            self.yaw_arrow.xy = (lons[-1] + dx, lats[-1] + dy)
+            self.yaw_arrow.set_position((lons[-1], lats[-1]))
 
         self.fig.canvas.draw_idle()
         self.fig.canvas.flush_events()
