@@ -40,6 +40,7 @@ class SimpleGPSPIDController:
         kd=0.15,
         max_steer_deg=35.0,
         waypoint_reached_m=1.5,
+        search_window=20,
         fixed_dt=None,
         verbose=True,
     ):
@@ -52,6 +53,8 @@ class SimpleGPSPIDController:
         self.max_steer_deg = float(max_steer_deg)
         self.max_steer_rad = math.radians(self.max_steer_deg)
         self.waypoint_reached_m = float(waypoint_reached_m)
+        self.search_window = int(search_window)
+        self.last_closest_idx = None
         self.fixed_dt = fixed_dt
         self.verbose = verbose
 
@@ -129,6 +132,20 @@ class SimpleGPSPIDController:
         distances = np.hypot(self.path_x_m - x_m, self.path_y_m - y_m)
         return int(np.argmin(distances))
 
+    def _find_closest_idx_forward(self, x_m, y_m):
+        n = len(self.path_x_m)
+        if self.last_closest_idx is None:
+            best = self._find_closest_idx(x_m, y_m)
+        else:
+            window = np.arange(self.last_closest_idx, self.last_closest_idx + self.search_window + 1) % n
+            distances = np.hypot(self.path_x_m[window] - x_m, self.path_y_m[window] - y_m)
+            best = int(window[int(np.argmin(distances))])
+        self.last_closest_idx = best
+        return best
+
+    def reset_path_tracking(self):
+        self.last_closest_idx = None
+
     def _find_target_idx(self, closest_idx):
         target_s_m = self.path_s_m[closest_idx] + self.lookahead_m
         if target_s_m <= self.path_s_m[-1]:
@@ -150,7 +167,7 @@ class SimpleGPSPIDController:
         return dt
 
     def compute_control_from_xy(self, x_m, y_m, yaw_rad):
-        closest_idx = self._find_closest_idx(float(x_m), float(y_m))
+        closest_idx = self._find_closest_idx_forward(float(x_m), float(y_m))
         target_idx = self._find_target_idx(closest_idx)
 
         target_x_m = float(self.path_x_m[target_idx])
