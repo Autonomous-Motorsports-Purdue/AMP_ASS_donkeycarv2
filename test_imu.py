@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
     # IMU
     #TODO remove the delay(1000) in imu src firmware
-    imu = IMU("/dev/ttyACM2")
+    imu = IMU("/dev/ttyACM1")
     V.add(imu, inputs=[], outputs=["yaw_rate", "yaw", "a_x", "a_y"], threaded=False) # TODO: make this threaded
 
 

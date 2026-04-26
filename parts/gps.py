@@ -185,7 +185,7 @@ def _format_output(sample):
 
 
 def main():
-    gps = GPS()
+    gps = GPS("/dev/ttyACM2")
     print("Starting GPS() standalone test using class defaults.")
     print("Press Ctrl+C to stop.")
 

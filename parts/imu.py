@@ -35,10 +35,12 @@ class IMU:
 
         line = self.ser_io.readline().strip()
         cal = self.ser_io.readline().strip()
-        newline = self.ser_io.readline().strip()    
+        # newline = self.ser_io.readline().strip()    
+        # clear screen
+        # os.system("clear") # so we dont have history
         print(f"Raw IMU line: '{line}'")  # Debug print of raw line
         print(f"Raw IMU cal line: '{cal}'")  # Debug print of calibration line
-        print(f"Raw IMU newline: '{newline}'")  # Debug print of newline
+        # print(f"Raw IMU newline: '{newline}'")  # Debug print of newline
         if "Cal" in line:
             print("Recieved Calibration Packet, ret 0's")
             # print(f"Received calibration packet: {line}")

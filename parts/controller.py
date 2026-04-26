@@ -201,6 +201,12 @@ class MPC_Part:
         distances = np.sqrt((self.path[:, 0] - gps_x)**2 + 
                           (self.path[:, 1] - gps_y)**2)
         closest_idx = np.argmin(distances)
+
+        # Print dx, dy to next point
+        next_point = self.path[closest_idx]
+        dx = next_point[0] - gps_x
+        dy = next_point[1] - gps_y
+        print(f"[MPC_Part] dx={dx:.2f}, dy={dy:.2f}, closest_idx={closest_idx}, idx_x = {next_point[0]:.2f}, idx_y = {next_point[1]:.2f}")
         
         # try:
         desired_ang_vel, target_speed = self.mpc.run(vehicle, self.path, closest_idx)
@@ -270,10 +276,10 @@ class ClosedLoopController:
         self.last_error = error
         
 
-        if abs(target_speed) > 0.1:
-            feedforward_angle = math.atan((desired_ang_vel * self.wheelbase) / target_speed)
-        else:
-            feedforward_angle = 0.0  
+        # if abs(target_speed) > 0.1:
+        #     feedforward_angle = math.atan((desired_ang_vel * self.wheelbase) / target_speed)
+        # else:
+        feedforward_angle = 0.0  
         
         feedback_correction = p_term + i_term + d_term
         total_steering_rad = feedforward_angle + feedback_correction
