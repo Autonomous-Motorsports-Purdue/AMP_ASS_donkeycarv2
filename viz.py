@@ -9,7 +9,9 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 
 
-GPS_RE = re.compile(r"GPS_to_xy:.*?x\s*(-?\d+(?:\.\d+)?)\s*m,\s*y\s*(-?\d+(?:\.\d+)?)\s*m")
+GPS_RE = re.compile(
+    r"GPS_to_xy:.*?x\s*(-?\d+(?:\.\d+)?)\s*m,\s*y\s*(-?\d+(?:\.\d+)?)\s*m(?:,\s*yaw\s*(None|-?\d+(?:\.\d+)?)\s*deg)?"
+)
 MPC_RE = re.compile(r"\[MPC_Part\]\s*dx=(-?\d+(?:\.\d+)?),\s*dy=(-?\d+(?:\.\d+)?)")
 IMU_RE = re.compile(
     r"Returning IMU values:\s*yaw_rate=(-?\d+(?:\.\d+)?),\s*yaw=(-?\d+(?:\.\d+)?)"
@@ -22,6 +24,7 @@ def wrap_deg(values):
 
 def parse_log(path: Path):
     latest_xy = None
+    latest_gps_yaw = None
     latest_imu = None
     rows = []
 
@@ -33,6 +36,8 @@ def parse_log(path: Path):
         m_gps = GPS_RE.search(line)
         if m_gps:
             latest_xy = (float(m_gps.group(1)), float(m_gps.group(2)))
+            yaw_token = m_gps.group(3)
+            latest_gps_yaw = None if yaw_token in (None, "None") else float(yaw_token)
 
         m_mpc = MPC_RE.search(line)
         if m_mpc and latest_xy is not None and latest_imu is not None:
@@ -40,23 +45,28 @@ def parse_log(path: Path):
             dy = float(m_mpc.group(2))
             x, y = latest_xy
             yaw_rate, yaw_imu = latest_imu
-            rows.append((x, y, x + dx, y + dy, yaw_imu, yaw_rate))
+            rows.append((x, y, x + dx, y + dy, yaw_imu, yaw_rate, np.nan if latest_gps_yaw is None else latest_gps_yaw))
 
     if not rows:
         raise ValueError("No usable samples found. Expected GPS_to_xy, IMU, and [MPC_Part] lines.")
 
     arr = np.array(rows, dtype=float)
-    x, y, dx_abs, dy_abs, yaw_imu_deg, yaw_rate = arr.T
+    x, y, dx_abs, dy_abs, yaw_imu_deg, yaw_rate, yaw_gps_logged_deg = arr.T
 
-    # GPS heading estimated from trajectory direction (consecutive XY points).
-    yaw_gps_deg = np.full_like(yaw_imu_deg, np.nan)
-    if len(x) >= 2:
+    # Prefer logged GPS yaw when available; otherwise estimate from XY motion.
+    yaw_gps_deg = yaw_gps_logged_deg.copy()
+    needs_fill = ~np.isfinite(yaw_gps_deg)
+    if np.any(needs_fill) and len(x) >= 2:
         vx = np.diff(x)
         vy = np.diff(y)
         yaw_step = np.degrees(np.arctan2(vy, vx))
-        yaw_gps_deg[1:] = yaw_step
-        yaw_gps_deg[0] = yaw_step[0]
-        valid = np.isfinite(yaw_gps_deg)
+        yaw_est = np.full_like(yaw_imu_deg, np.nan)
+        yaw_est[1:] = yaw_step
+        yaw_est[0] = yaw_step[0]
+        yaw_gps_deg[needs_fill] = yaw_est[needs_fill]
+
+    valid = np.isfinite(yaw_gps_deg)
+    if np.any(valid):
         yaw_gps_deg[valid] = np.degrees(np.unwrap(np.radians(yaw_gps_deg[valid])))
 
     yaw_desired_deg = np.degrees(np.arctan2(dy_abs - y, dx_abs - x))
@@ -118,7 +128,7 @@ def build_animation(data, fps=20, step=1):
     ax_yaw.set_xlim(0, n - 1)
     ax_yaw.set_ylim(-190, 190)
     (line_yaw_imu,) = ax_yaw.plot([], [], color="#44dd44", lw=1.8, label="IMU yaw")
-    (line_yaw_gps,) = ax_yaw.plot([], [], color="#aa44ff", lw=1.8, label="GPS yaw (from XY)")
+    (line_yaw_gps,) = ax_yaw.plot([], [], color="#aa44ff", lw=1.8, label="GPS yaw")
     (line_yaw_des,) = ax_yaw.plot([], [], color="#ff8800", lw=1.4, label="desired yaw")
     cursor_yaw = ax_yaw.axvline(0, color="#999999", lw=1)
     ax_yaw.legend(loc="best", fontsize=8)
@@ -138,6 +148,7 @@ def build_animation(data, fps=20, step=1):
 
     def update(frame_idx):
         i = int(frame_idx)
+        # print(i, end="\r")
 
         line_actual.set_data(x[: i + 1], y[: i + 1])
         line_desired.set_data(dx_abs[: i + 1], dy_abs[: i + 1])
@@ -227,6 +238,7 @@ def main():
     out_path = Path(args.output) if args.output else in_path.with_name(f"{in_path.stem}_viz.mp4")
 
     data = parse_log(in_path)
+    print("Parsed log.")
     fig, anim = build_animation(data, fps=args.fps, step=args.step)
     saved = save_animation(anim, out_path, fps=args.fps)
     print(f"Saved visualization: {saved}")

@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     # GPS (replay from CSV instead of live receiver)
     gps = GPS('/dev/ttyACM2')
-    V.add(gps, inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count'], threaded=True)
+    V.add(gps, inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count', 'gps_heading'], threaded=True)
 
     # GPS Visualizer - MACOS WILL FORCEFULLY CRASH THIS IF THREADED IS SET TO TRUE, BUT IT IS NECESSARY FOR REAL-TIME USAGE
     # gps_visualizer = GPSVisualizer()
