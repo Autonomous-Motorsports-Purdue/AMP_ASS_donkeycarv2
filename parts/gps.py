@@ -19,9 +19,9 @@ from pygnssutils.helpers import parse_url
 
 
 class GPS:
-    def __init__(self):
+    def __init__(self, port: str):
         # Receiver configuration.
-        self.serial_port = "/dev/ttyACM2"
+        self.serial_port = port
         self.baudrate = 9600
         self.timeout = 3
 
@@ -154,6 +154,9 @@ class GPS:
 
     def run_threaded(self):
         self._drain_gnss_queue()
+
+        # print("[DEBUG]", self.latest_output)
+
         with self.lock:
             return self.latest_output
 
@@ -171,3 +174,31 @@ class GPS:
 
         with self.lock:
             self.started = False
+
+
+def _format_output(sample):
+    lat, lon, alt, fix, diff_age, hdop, sip = sample
+    return (
+        f"lat={lat}, lon={lon}, alt={alt}, fix={fix}, "
+        f"diff_age={diff_age}, hdop={hdop}, sip={sip}"
+    )
+
+
+def main():
+    gps = GPS()
+    print("Starting GPS() standalone test using class defaults.")
+    print("Press Ctrl+C to stop.")
+
+    try:
+        while True:
+            print(_format_output(gps.run()))
+            sleep(0.5)
+    except KeyboardInterrupt:
+        print("Stopping GPS test...")
+    finally:
+        gps.shutdown()
+
+
+if __name__ == "__main__":
+    main()
+

@@ -56,7 +56,7 @@ class UART_backup_driver:
 
         # send start byte
         # write extra 0
-        time.sleep(0.001)
+        time.sleep(0.01)
         #self.ser.write(f"0,0\r".encode("ascii"))
         self.ser.write(f"{self.curr_v},{self.curr_s}\r".encode("ascii"))
         self.ser.flush()
@@ -96,7 +96,7 @@ class UART_backup_driver:
         self.update_velocity(v)
         # ignore for testing
         self.update_steering(s)
-        self.curr_s = 128
+        # self.curr_s = 128
         print(f"Updated velocity to {self.curr_v} and steering to {self.curr_s}")
         #print(f"New steering: {self.curr_s}")
 

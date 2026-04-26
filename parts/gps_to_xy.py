@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 
 class GPS_to_xy:
@@ -24,6 +25,10 @@ class GPS_to_xy:
 
     def to_xy(self, lat_deg: float, lon_deg: float):
         """Return (x, y) in meters where x=east and y=north."""
+        if lat_deg is None or lon_deg is None:
+            print("GPS_TO_XY got NONE. Sleeping for 1s")
+            time.sleep(1)
+            return None, None
         lat_rad = np.radians(lat_deg)
         lon_rad = np.radians(lon_deg)
 

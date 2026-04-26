@@ -1,4 +1,4 @@
-import donkeycar.donkeycar as dk
+import donkeycar as dk
 
 from parts.uart_backup import UART_backup_driver
 from parts.imu import IMU
@@ -10,7 +10,7 @@ from parts.gps_to_xy import GPS_to_xy
 from parts.logger2 import Logger2
 from parts.health_check import HealthCheck
 
-from parts.gps_visualizer import GPSVisualizer
+# from parts.gps_visualizer import GPSVisualizer
 
 import numpy as np
 
@@ -43,20 +43,20 @@ if __name__ == "__main__":
     V.add(heartbeat, inputs=[], outputs=["safety/heartbeat"])
 
     # # UART driver
-    # uart = UART_backup_driver("/dev/ttyACM0")
-    # V.add(uart, inputs=["controls/throttle", "controls/steering", "safety/heartbeat"], outputs=[], threaded=False)
+    uart = UART_backup_driver("/dev/ttyACM0")
+    V.add(uart, inputs=["controls/throttle", "controls/steering", "safety/heartbeat"], outputs=[], threaded=False)
 
     # IMU
-    imu = IMU()
+    imu = IMU("/dev/ttyACM2")
     V.add(imu, inputs=[], outputs=["yaw_rate", "yaw", "a_x", "a_y"], threaded=False) # TODO: make this threaded
 
     # GPS (replay from CSV instead of live receiver)
-    gps = GPS_CSV(path=args.file_name, playback_rate_hz=4.0, loop=True)
+    gps = GPS('/dev/ttyACM1')
     V.add(gps, inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count'], threaded=True)
 
     # GPS Visualizer - MACOS WILL FORCEFULLY CRASH THIS IF THREADED IS SET TO TRUE, BUT IT IS NECESSARY FOR REAL-TIME USAGE
-    gps_visualizer = GPSVisualizer()
-    V.add(gps_visualizer, inputs=['lat_raw', 'lon_raw', "yaw"], outputs=[], threaded=False)
+    # gps_visualizer = GPSVisualizer()
+    # V.add(gps_visualizer, inputs=['lat_raw', 'lon_raw', "yaw"], outputs=[], threaded=False)
 
     # EKF Localizer
     """
@@ -83,4 +83,4 @@ if __name__ == "__main__":
     #logger = Logger2()
     #V.add(logger, inputs=["lat", "lon", "v_x", "v_y", "yaw", "a_x", "a_y", "x", "y", "controls/throttle", "controls/steering"], outputs=[], threaded=False)
 
-    V.start(rate_hz=100, max_loop_count=1000) # Remove this once we do more.
+    V.start(rate_hz=100, max_loop_count=None) # Remove this once we do more.

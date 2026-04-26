@@ -30,6 +30,7 @@ class IMU:
     def run(self):
         """Read a line of 6 comma-separated IMU values and return yaw_rate."""
         if not self.ser_io:
+            print("IMU ERROR")
             return self.yaw_rate, self.yaw, 0, 0
 
         line = self.ser_io.readline().strip()
@@ -52,13 +53,14 @@ class IMU:
             # print(f"Parsed IMU parts: {parts}")
             ox, oy, oz, gx, gy, gz, ax, ay, az = [float(v) for v in parts]
 
-            self.yaw_rate = math.radians(gz)
+            # self.yaw_rate = math.radians(gz)
+            self.yaw_rate = gz
             self.yaw = math.radians(ox)
 
             self.ax, self.ay = ax, ay
 
             # if self.debug:
-                # print(f"Yaw rate: {self.yaw_rate:.4f} rad/s")
+            #    print(f"Yaw rate: {self.yaw_rate:.4f} rad/s")
 
         except Exception as e:
             if self.debug:

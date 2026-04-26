@@ -18,7 +18,7 @@ import time
 
 class UART_VERSION2:
     def __init__(self):
-        self.ser = serial.Serial(port="/dev/ttyACM2", baudrate=115200)
+        self.ser = serial.Serial(port="/dev/ttyACM0", baudrate=115200)
         time.sleep(2)
      
 
