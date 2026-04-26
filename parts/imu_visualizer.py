@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import math
-import threading
 import time
 from collections import deque
 
@@ -31,8 +30,7 @@ class IMUVisualizer:
         self.ays = deque(maxlen=buffer_size)
 
         self._t0 = time.time()
-        self._lock = threading.Lock()
-        self._pending = None
+        self._last_draw = 0.0
         self._running = True
         self._redraw_hz = redraw_hz
 
@@ -73,10 +71,15 @@ class IMUVisualizer:
         plt.show(block=False)
 
     def run_threaded(self, yaw_rate, yaw, ax, ay):
+        # Called from the main vehicle loop thread; matplotlib GUI calls
+        # must happen here, not in update().
         if yaw_rate is None:
             return
-        with self._lock:
-            self._pending = (yaw_rate, yaw, ax, ay, time.time() - self._t0)
+        now = time.time()
+        if now - self._last_draw < 1.0 / self._redraw_hz:
+            return
+        self._last_draw = now
+        self._draw_sample(yaw_rate, yaw, ax, ay, now - self._t0)
 
     def run(self, yaw_rate, yaw, ax, ay):
         if yaw_rate is None:
@@ -84,16 +87,9 @@ class IMUVisualizer:
         self._draw_sample(yaw_rate, yaw, ax, ay, time.time() - self._t0)
 
     def update(self):
-        dt = 1.0 / self._redraw_hz
+        # No-op worker; drawing happens in run_threaded on the main thread.
         while self._running:
-            sample = None
-            with self._lock:
-                if self._pending is not None:
-                    sample = self._pending
-                    self._pending = None
-            if sample is not None:
-                self._draw_sample(*sample)
-            time.sleep(dt)
+            time.sleep(0.1)
 
     def _draw_sample(self, yaw_rate, yaw, ax, ay, t):
         self.t.append(t)

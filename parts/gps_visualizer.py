@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import math
 import numpy as np
-import threading
 import time
 from collections import deque
 
@@ -40,12 +39,11 @@ class GPSVisualizer:
             self.lat_path = None
             self.lon_path = None
 
-        # threaded-mode state: run_threaded just stashes the latest sample,
-        # update() consumes and draws
-        self._lock = threading.Lock()
-        self._pending = None  # (lat, lon, yaw) or None
+        # Drawing must happen on the main thread (Tk/Qt event loops),
+        # so run_threaded does the draw and update() is a keep-alive.
         self._running = True
         self._redraw_hz = 15.0
+        self._last_draw = 0.0
 
         self.fig, self.ax = plt.subplots(figsize=(9, 9))
         self.ax.set_title("GPS Track")
@@ -123,21 +121,16 @@ class GPSVisualizer:
     def run_threaded(self, lat_deg, lon_deg, yaw=0.0):
         if lat_deg is None or lon_deg is None:
             return
-        with self._lock:
-            self._pending = (lat_deg, lon_deg, yaw)
+        now = time.time()
+        if now - self._last_draw < 1.0 / self._redraw_hz:
+            return
+        self._last_draw = now
+        self._draw_sample(lat_deg, lon_deg, yaw)
 
     def update(self):
-        """Donkeycar thread worker: drain the latest sample and redraw."""
-        dt = 1.0 / self._redraw_hz
+        """No-op worker; drawing happens in run_threaded on the main thread."""
         while self._running:
-            sample = None
-            with self._lock:
-                if self._pending is not None:
-                    sample = self._pending
-                    self._pending = None
-            if sample is not None:
-                self._draw_sample(*sample)
-            time.sleep(dt)
+            time.sleep(0.1)
 
     def run(self, lat_deg, lon_deg, yaw=90.0):
         if lat_deg is None or lon_deg is None:
