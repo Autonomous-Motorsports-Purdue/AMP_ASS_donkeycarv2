@@ -137,7 +137,8 @@ class SimpleGPSPIDController:
         if self.last_closest_idx is None:
             best = self._find_closest_idx(x_m, y_m)
         else:
-            window = np.arange(self.last_closest_idx, self.last_closest_idx + self.search_window + 1) % n
+            end = min(self.last_closest_idx + self.search_window, n - 1)
+            window = np.arange(self.last_closest_idx, end + 1)
             distances = np.hypot(self.path_x_m[window] - x_m, self.path_y_m[window] - y_m)
             best = int(window[int(np.argmin(distances))])
         self.last_closest_idx = best
@@ -148,11 +149,9 @@ class SimpleGPSPIDController:
 
     def _find_target_idx(self, closest_idx):
         target_s_m = self.path_s_m[closest_idx] + self.lookahead_m
-        if target_s_m <= self.path_s_m[-1]:
-            return int(np.searchsorted(self.path_s_m, target_s_m, side="left"))
-
-        wrapped_s_m = target_s_m - self.path_s_m[-1]
-        return int(np.searchsorted(self.path_s_m, wrapped_s_m, side="left"))
+        if target_s_m >= self.path_s_m[-1]:
+            return len(self.path_s_m) - 1
+        return int(np.searchsorted(self.path_s_m, target_s_m, side="left"))
 
     def _compute_dt(self):
         if self.fixed_dt is not None:
