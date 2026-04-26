@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import contextily as cx
 import math
 import numpy as np
 import threading
@@ -22,7 +21,7 @@ class GPSVisualizer:
         V.add(GPSVisualizer(), inputs=['lat_raw', 'lon_raw', 'yaw'], outputs=[])
     """
 
-    def __init__(self, buffer_size=BUFFER_SIZE, tile_source=cx.providers.Esri.WorldImagery,
+    def __init__(self, path_csv=None, buffer_size=BUFFER_SIZE, tile_source=None,
                  max_zoom=22, min_span_m=60.0, offline_map_path="maps/wlaf_z18.tif",
                  view_span_m=80.0):
         self.lats = deque(maxlen=buffer_size)
@@ -32,6 +31,14 @@ class GPSVisualizer:
         self.min_span_deg = min_span_m / 111_320.0  # ~meters per degree lat
         self.view_span_deg = view_span_m / 111_320.0
         self._cached_bounds = None
+        
+        if (path_csv is not None):
+            data = np.genfromtxt(path_csv, delimiter=',', skip_header=1, dtype=float, encoding='utf-8')
+            self.lat_path = data[:,0]
+            self.lon_path = data[:,1]
+        else:
+            self.lat_path = None
+            self.lon_path = None
 
         # threaded-mode state: run_threaded just stashes the latest sample,
         # update() consumes and draws
@@ -46,34 +53,16 @@ class GPSVisualizer:
         self.ax.set_ylabel("Latitude")
 
         self._map_extent = None
-        if offline_map_path:
-            self._load_offline_map(offline_map_path)
+        # if offline_map_path:
+        #     self._load_offline_map(offline_map_path)
 
         (self.trail_line,) = self.ax.plot([], [], '-', color='#00ff88', linewidth=2, alpha=0.8, zorder=3)
         (self.current_dot,) = self.ax.plot([], [], 'o', color='#ff3333', markersize=10, zorder=4)
+        if (self.lat_path is not None and self.lon_path is not None):
+            (self.path,) = self.ax.plot(self.lon_path, self.lat_path, '--', color='#3333ff', linewidth=2, alpha=0.5, zorder=2)
 
         plt.ion()
         plt.show(block=False)
-
-    def _load_offline_map(self, path):
-        """Load a GeoTIFF basemap (saved by contextily.bounds2raster, EPSG:3857)
-        and display it on the lat/lon axis using its lat/lon extent."""
-        import rasterio
-        from rasterio.warp import transform_bounds
-
-        with rasterio.open(path) as src:
-            arr = src.read()  # (bands, H, W)
-            img = np.transpose(arr, (1, 2, 0))
-            if img.shape[2] == 1:
-                img = img[:, :, 0]
-            w, s, e, n = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
-
-        self.ax.imshow(img, extent=(w, e, s, n), origin="upper", zorder=0,
-                       interpolation="bilinear")
-        self.ax.set_xlim(w, e)
-        self.ax.set_ylim(s, n)
-        self.ax.set_aspect(1.0 / math.cos(math.radians(0.5 * (s + n))))
-        self._map_extent = (w, e, s, n)
 
     def _follow_view(self, lat, lon):
         """Recenter the axis around (lat, lon) at self.view_span_deg, clamped
@@ -131,31 +120,6 @@ class GPSVisualizer:
             lon < lon_min + lon_margin or lon > lon_max - lon_margin
         )
 
-    def _refresh_basemap(self):
-        lats = list(self.lats)
-        lons = list(self.lons)
-        bounds = self._pad_bounds(min(lats), max(lats), min(lons), max(lons))
-        lat_min, lat_max, lon_min, lon_max = bounds
-
-        self.ax.set_xlim(lon_min, lon_max)
-        self.ax.set_ylim(lat_min, lat_max)
-
-        # remove old basemap images but keep our plot lines
-        for img in self.ax.images:
-            img.remove()
-
-        try:
-            cx.add_basemap(
-                self.ax,
-                crs="EPSG:4326",
-                source=self.tile_source,
-                zoom=self.max_zoom,
-            )
-        except Exception:
-            pass
-
-        self._cached_bounds = bounds
-
     def run_threaded(self, lat_deg, lon_deg, yaw=0.0):
         if lat_deg is None or lon_deg is None:
             return
@@ -189,11 +153,8 @@ class GPSVisualizer:
 
         self.trail_line.set_data(lons, lats)
         self.current_dot.set_data([lons[-1]], [lats[-1]])
-
-        if OFFLINE_MODE:
-            self._follow_view(lats[-1], lons[-1])
-        elif self._needs_tile_refresh((min(lats), max(lats), min(lons), max(lons))):
-            self._refresh_basemap()
+        
+        self._follow_view(lats[-1], lons[-1])
 
         theta = yaw
         lat_span = max(max(lats) - min(lats), 1e-5)
