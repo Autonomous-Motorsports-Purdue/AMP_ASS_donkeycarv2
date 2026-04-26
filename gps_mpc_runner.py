@@ -1,13 +1,16 @@
-import donkeycar as dk
+import donkeycar.donkeycar as dk
 
 from parts.uart_backup import UART_backup_driver
 from parts.imu import IMU
 from parts.gps import GPS
+from parts.gps_csv import GPS_CSV
 from parts.controller import MPC_Part, ClosedLoopController
 from parts.ekf_localizer import EKFLocalizer
 from parts.gps_to_xy import GPS_to_xy
 from parts.logger2 import Logger2
 from parts.health_check import HealthCheck
+
+from parts.gps_visualizer import GPSVisualizer
 
 import numpy as np
 
@@ -16,6 +19,11 @@ checklist if not working
 
 1. verify IMU, GPS, Main PCB UART are plugged in.
 2. verify ports for each. should be /dev/tty* or /dev/usb*. unplug to test
+
+run this to download the offline map of WL: 
+```
+python 
+```
 '''
 import argparse
 if __name__ == "__main__":
@@ -34,17 +42,21 @@ if __name__ == "__main__":
     # just returns true rn
     V.add(heartbeat, inputs=[], outputs=["safety/heartbeat"])
 
-    # UART driver
-    uart = UART_backup_driver("/dev/ttyACM0")
-    V.add(uart, inputs=["controls/throttle", "controls/steering", "safety/heartbeat"], outputs=[], threaded=False)
+    # # UART driver
+    # uart = UART_backup_driver("/dev/ttyACM0")
+    # V.add(uart, inputs=["controls/throttle", "controls/steering", "safety/heartbeat"], outputs=[], threaded=False)
 
     # IMU
     imu = IMU()
     V.add(imu, inputs=[], outputs=["yaw_rate", "yaw", "a_x", "a_y"], threaded=False) # TODO: make this threaded
 
-    # GPS
-    gps = GPS()
-    V.add(GPS(), inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count'], threaded=True)
+    # GPS (replay from CSV instead of live receiver)
+    gps = GPS_CSV(path=args.file_name, playback_rate_hz=4.0, loop=True)
+    V.add(gps, inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count'], threaded=True)
+
+    # GPS Visualizer - MACOS WILL FORCEFULLY CRASH THIS IF THREADED IS SET TO TRUE, BUT IT IS NECESSARY FOR REAL-TIME USAGE
+    gps_visualizer = GPSVisualizer()
+    V.add(gps_visualizer, inputs=['lat_raw', 'lon_raw', "yaw"], outputs=[], threaded=False)
 
     # EKF Localizer
     """
