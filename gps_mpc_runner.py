@@ -55,8 +55,8 @@ if __name__ == "__main__":
     V.add(gps, inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count'], threaded=True)
 
     # GPS Visualizer - MACOS WILL FORCEFULLY CRASH THIS IF THREADED IS SET TO TRUE, BUT IT IS NECESSARY FOR REAL-TIME USAGE
-    gps_visualizer = GPSVisualizer()
-    V.add(gps_visualizer, inputs=['lat_raw', 'lon_raw', "yaw"], outputs=[], threaded=False)
+    gps_visualizer = GPSVisualizer(path_csv=args.file_name)
+    V.add(gps_visualizer, inputs=['lat_raw', 'lon_raw', "yaw"], outputs=[], threaded=True)
 
     # EKF Localizer
     """
