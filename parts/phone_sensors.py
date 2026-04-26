@@ -8,8 +8,12 @@ FLUSH_INTERVAL = 90
 KNOWN_GROUPS = [
     ("acc_time",      ["accX", "accY", "accZ"],           "Accelerometer",       "m/s²"),
     ("gyr_time",      ["gyrX", "gyrY", "gyrZ"],           "Gyroscope",           "rad/s"),
+    ("gyro_time",     [("gyroX", "gyrX"), ("gyroY", "gyrY"), ("gyroZ", "gyrZ")],
+                                                          "Gyroscope",           "rad/s"),
     ("mag_time",      ["magX", "magY", "magZ"],            "Magnetometer",        "µT"),
     ("lin_time",      ["linX", "linY", "linZ"],            "Linear Acceleration", "m/s²"),
+    ("lin_acc_time",  [("lin_accX", "linX"), ("lin_accY", "linY"), ("lin_accZ", "linZ")],
+                                                           "Linear Acceleration", "m/s²"),
     ("pressure_time", ["pressure"],                        "Pressure",            "hPa"),
     ("prox_time",     ["prox"],                            "Proximity",           "cm"),
     ("light_time",    ["light"],                           "Light",               "lx"),
@@ -36,8 +40,8 @@ class PhoneSensors():
         self.data = {}
         for time_key, data_keys, _, _ in self.groups:
             self.data[time_key] = deque(maxlen=BUFFER_SIZE)
-            for dk in data_keys:
-                self.data[dk] = deque(maxlen=BUFFER_SIZE)
+            for _, canonical in data_keys:
+                self.data[canonical] = deque(maxlen=BUFFER_SIZE)
 
         self.latest = (None,) * 9
         self.lock = threading.Lock()
@@ -61,12 +65,17 @@ class PhoneSensors():
         for time_key, data_keys, title, ylabel in KNOWN_GROUPS:
             if time_key not in available:
                 continue
-            present = [k for k in data_keys if k in available]
+            # data_keys entries may be "name" or ("remote_name", "canonical_name")
+            present = []
+            for entry in data_keys:
+                remote, canonical = entry if isinstance(entry, tuple) else (entry, entry)
+                if remote in available:
+                    present.append((remote, canonical))
             if not present:
                 continue
             groups.append((time_key, present, title, ylabel))
             claimed.add(time_key)
-            claimed.update(present)
+            claimed.update(remote for remote, _ in present)
 
         remaining_time = [b for b in available - claimed if b.endswith("_time")]
         for tb in sorted(remaining_time):
@@ -74,7 +83,7 @@ class PhoneSensors():
             data = [b for b in available - claimed - {tb}
                     if b.startswith(prefix) or b == prefix]
             if data:
-                groups.append((tb, sorted(data), prefix.title(), ""))
+                groups.append((tb, [(d, d) for d in sorted(data)], prefix.title(), ""))
                 claimed.add(tb)
                 claimed.update(data)
 
@@ -82,7 +91,8 @@ class PhoneSensors():
             raise RuntimeError("No recognized sensor groups found in this experiment.")
 
         for time_key, data_keys, title, _ in groups:
-            print(f"  {title}: {data_keys} (time: {time_key})")
+            shown = [c if r == c else f"{r}->{c}" for r, c in data_keys]
+            print(f"  {title}: {shown} (time: {time_key})")
 
         return groups
 
@@ -91,8 +101,8 @@ class PhoneSensors():
         for time_key, data_keys, _, _ in self.groups:
             t = self.last_time[time_key]
             parts.append(f"{time_key}={t}")
-            for dk in data_keys:
-                parts.append(f"{dk}={t}|{time_key}")
+            for remote, _ in data_keys:
+                parts.append(f"{remote}={t}|{time_key}")
         return f"{self.base_url}/get?{'&'.join(parts)}"
 
     def _fetch_all(self):
@@ -113,9 +123,9 @@ class PhoneSensors():
                 continue
             self.data[time_key].extend(time_vals)
             self.last_time[time_key] = time_vals[-1]
-            for dk in data_keys:
-                vals = buffers.get(dk, {}).get("buffer", [])
-                self.data[dk].extend(vals)
+            for remote, canonical in data_keys:
+                vals = buffers.get(remote, {}).get("buffer", [])
+                self.data[canonical].extend(vals)
 
     def _get_latest(self, key):
         buf = self.data.get(key)
