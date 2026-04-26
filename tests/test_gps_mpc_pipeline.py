@@ -6,9 +6,13 @@ from unittest.mock import patch
 
 import numpy as np
 
+from gps_pid_pseudo_sim import SimplePIDSimConfig, run_simple_pid_sim
+from gps_pure_pursuit_pseudo_sim import PurePursuitSimConfig, run_pure_pursuit_sim
 from gps_mpc_pseudo_sim import SimConfig, load_raceline_track, run_pseudo_sim, write_xy_sidecar
 from parts.controller import ClosedLoopController, MPC_Part
 from parts.ekf_localizer import EKFLocalizer
+from parts.gps_pure_pursuit_waypoint import GPSPurePursuitWaypointGenerator, R_EARTH, RAD2DEG
+from parts.simple_gps_pid import R_EARTH_M, SimpleGPSPIDController
 from parts.uart_backup import UART_backup_driver
 
 
@@ -77,6 +81,42 @@ class TestEKFLocalizer(unittest.TestCase):
 
         self.assertAlmostEqual(vx, 0.0, places=6)
         self.assertAlmostEqual(vy, 0.1, places=6)
+
+    def test_gps_velocity_update_tracks_straight_motion(self):
+        from parts.gps_to_xy import GPS_to_xy
+
+        origin_lat = 40.0
+        origin_lon = -86.0
+        converter = GPS_to_xy(origin_lat, origin_lon)
+        ekf = EKFLocalizer(
+            origin_lat,
+            origin_lon,
+            imu_rate=10,
+            gps_rate=4,
+            heading_unit="rad",
+            fixed_dt=0.1,
+        )
+
+        true_x = 0.0
+        true_speed = 5.0
+        gps_period_steps = 3
+        lat = origin_lat
+        lon = origin_lon
+
+        for step in range(30):
+            true_x += true_speed * 0.1
+            if step % gps_period_steps == 0:
+                lat, lon = converter.to_latlon(true_x, 0.0)
+            else:
+                lat, lon = None, None
+
+            est_lat, est_lon, est_vx, est_vy = ekf.run(0.0, 0.0, 0.0, lat, lon)
+
+        est_x, est_y = converter.to_xy(est_lat, est_lon)
+        self.assertAlmostEqual(est_x, true_x, delta=1.0)
+        self.assertAlmostEqual(est_y, 0.0, delta=0.5)
+        self.assertAlmostEqual(est_vx, true_speed, delta=1.5)
+        self.assertAlmostEqual(est_vy, 0.0, delta=1.0)
 
 
 class TestClosedLoopController(unittest.TestCase):
@@ -184,6 +224,9 @@ class TestPseudoSimHelpers(unittest.TestCase):
                     yaw_rate_noise_degps=0.0,
                     accel_noise_mps2=0.0,
                     initial_speed_mps=7.5,
+                    ekf_gps_pos_std_m=2.5,
+                    ekf_gps_vel_std_mps=1.5,
+                    ekf_use_gps_velocity=True,
                     seed=1,
                 ),
             )
@@ -191,6 +234,127 @@ class TestPseudoSimHelpers(unittest.TestCase):
             self.assertGreater(len(logs["time_s"]), 0)
             self.assertTrue(np.isfinite(logs["steering_cmd"]).all())
             self.assertLess(summary["mean_cross_track_error_m"], 2.0)
+
+
+class TestGPSPurePursuitStack(unittest.TestCase):
+    def test_waypoint_generator_outputs_forward_target(self):
+        origin_lat = 40.0
+        origin_lon = -86.0
+        cos_lat = math.cos(math.radians(origin_lat))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir) / "track.csv"
+            rows = ["latitude,longitude"]
+            for x_m in [0.0, 2.0, 4.0, 6.0, 8.0]:
+                lon = origin_lon + (x_m / (R_EARTH * cos_lat)) * RAD2DEG
+                rows.append(f"{origin_lat},{lon}")
+            csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+            generator = GPSPurePursuitWaypointGenerator(csv_path, lookahead_m=4.0, verbose=False)
+            waypoint = generator.run(origin_lat, origin_lon)
+
+        self.assertIsNotNone(waypoint)
+        self.assertGreater(waypoint[0], 0.0)
+        self.assertAlmostEqual(waypoint[1], 0.0, delta=0.5)
+
+    def test_pure_pursuit_pseudo_sim_smoke(self):
+        origin_lat = 40.0
+        origin_lon = -86.0
+        cos_lat = math.cos(math.radians(origin_lat))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir) / "track.csv"
+            rows = ["latitude,longitude"]
+            radius_m = 20.0
+            for theta in np.linspace(0.0, 2.0 * math.pi, 81)[:-1]:
+                x_m = radius_m * math.cos(theta)
+                y_m = radius_m * math.sin(theta)
+                lat = origin_lat + (y_m / R_EARTH) * RAD2DEG
+                lon = origin_lon + (x_m / (R_EARTH * cos_lat)) * RAD2DEG
+                rows.append(f"{lat},{lon}")
+            csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+            generator, logs, summary = run_pure_pursuit_sim(
+                csv_path,
+                PurePursuitSimConfig(
+                    dt=0.1,
+                    laps=1,
+                    gps_noise_m=0.0,
+                    lookahead_m=6.0,
+                    throttle_cmd=0.35,
+                    throttle_to_speed_mps=20.0,
+                    speed_response_s=0.5,
+                    seed=1,
+                ),
+            )
+
+        self.assertGreater(len(logs["time_s"]), 0)
+        self.assertLess(summary["mean_cross_track_error_m"], 3.0)
+        self.assertLess(summary["max_cross_track_error_m"], 5.0)
+
+
+class TestSimpleGPSPIDStack(unittest.TestCase):
+    def test_simple_pid_controller_outputs_small_steering_on_straight_track(self):
+        origin_lat = 40.0
+        origin_lon = -86.0
+        cos_lat = math.cos(math.radians(origin_lat))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir) / "track.csv"
+            rows = ["latitude,longitude"]
+            for x_m in [0.0, 2.0, 4.0, 6.0, 8.0]:
+                lon = origin_lon + (x_m / (R_EARTH_M * cos_lat)) * (180.0 / math.pi)
+                rows.append(f"{origin_lat},{lon}")
+            csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+            controller = SimpleGPSPIDController(csv_path, fixed_dt=0.05, verbose=False)
+            steering, throttle = controller.run(origin_lat, origin_lon, 0.0)
+
+        self.assertAlmostEqual(steering, 0.0, delta=0.2)
+        self.assertGreater(throttle, 0.0)
+
+    def test_simple_pid_pseudo_sim_smoke(self):
+        origin_lat = 40.0
+        origin_lon = -86.0
+        cos_lat = math.cos(math.radians(origin_lat))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir) / "track.csv"
+            rows = ["latitude,longitude"]
+            radius_m = 20.0
+            for theta in np.linspace(0.0, 2.0 * math.pi, 81)[:-1]:
+                x_m = radius_m * math.cos(theta)
+                y_m = radius_m * math.sin(theta)
+                lat = origin_lat + (y_m / R_EARTH_M) * (180.0 / math.pi)
+                lon = origin_lon + (x_m / (R_EARTH_M * cos_lat)) * (180.0 / math.pi)
+                rows.append(f"{lat},{lon}")
+            csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+            controller, logs, summary = run_simple_pid_sim(
+                csv_path,
+                SimplePIDSimConfig(
+                    dt=0.05,
+                    gps_rate_hz=5.0,
+                    laps=1,
+                    gps_noise_m=0.0,
+                    yaw_noise_deg=0.0,
+                    lookahead_m=6.0,
+                    throttle_cmd=0.22,
+                    throttle_to_speed_mps=20.0,
+                    speed_response_s=0.5,
+                    wheelbase_m=1.000506,
+                    max_steer_deg=35.0,
+                    kp=1.0,
+                    ki=0.0,
+                    kd=0.15,
+                    seed=1,
+                ),
+            )
+
+        self.assertGreater(len(logs["time_s"]), 0)
+        self.assertEqual(summary["completed_laps"], 1.0)
+        self.assertLess(summary["mean_cross_track_error_m"], 2.0)
+        self.assertLess(summary["max_cross_track_error_m"], 2.0)
 
 
 class TestOfflineControllerChain(unittest.TestCase):

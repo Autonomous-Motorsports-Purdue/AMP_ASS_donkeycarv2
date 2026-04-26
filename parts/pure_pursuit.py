@@ -1,17 +1,26 @@
 import math
+
+
 class Pure_Pursuit():
-    def __init__(self, speed):
+    STEERING_DEG_PER_UNIT = 18.523
+
+    def __init__(self, speed, verbose=True):
         self.wheelbase = 1.000506 
         self.speed = speed
         self.speed_fast = 0.45
         self.speed_prev = self.speed_fast
+        self.verbose = verbose
 
     def run(self, target_position):
+        if target_position is None:
+            return 0.0, 0.0
+
         targetx, targety, _ = target_position 
         targety = -targety
         targetx += 0.6096 #Back wheels to camera
         targetx *= 0.75 # Constant for urgency
-        print(f"{targetx}, {targety}")
+        if self.verbose:
+            print(f"{targetx}, {targety}")
         #targetx, targety = 3, -2.5 
         # we move forward in x 
         yaw = 0
@@ -27,7 +36,11 @@ class Pure_Pursuit():
 
         Ld = math.sqrt(targetx**2 + targety**2)
 
-        print(f"Debug Print 2: Distance from rear wheel to target: {Ld:.2f} Meters\n")
+        if Ld < 1e-6:
+            return 0.0, self.speed
+
+        if self.verbose:
+            print(f"Debug Print 2: Distance from rear wheel to target: {Ld:.2f} Meters\n")
 
 
         steering_theta  = math.atan2((2*self.wheelbase*math.sin(alpha)),Ld); # Steering angle in radians.
@@ -39,10 +52,12 @@ class Pure_Pursuit():
         else:
             steering_value = steering_theta / 22.096
         '''
-        steering_value = steering_theta / 18.523 
+        steering_value = steering_theta / self.STEERING_DEG_PER_UNIT
+        steering_value = max(-1.0, min(1.0, steering_value))
         #steering_value = steering_theta /15.523 
 
-        print(f"Sterring theta: {steering_theta}\tSteering value: {steering_value}")
+        if self.verbose:
+            print(f"Sterring theta: {steering_theta}\tSteering value: {steering_value}")
         #steering_value = math.atan((2*self.wheelbase*math.sin(alpha)/self.kv * velocity)); # Steering angle with velocity
 
         #currently returns angle in degrees. Need to convert from degrees to arbitrary steering value,
@@ -58,3 +73,6 @@ class Pure_Pursuit():
         ret_speed = self.speed
 
         return steering_value, ret_speed
+
+    def shutdown(self):
+        pass

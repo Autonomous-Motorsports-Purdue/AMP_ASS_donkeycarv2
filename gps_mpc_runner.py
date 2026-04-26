@@ -23,6 +23,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("file_name", help="gps waypoint csv file name")
     parser.add_argument("--max-loop-count", type=int, default=None, help="optional loop limit for bench testing")
+    parser.add_argument(
+        "--localization-mode",
+        choices=["raw_gps", "ekf"],
+        default="raw_gps",
+        help="use raw GPS XY directly or the EKF localizer",
+    )
+    parser.add_argument("--ekf-gps-pos-std-m", type=float, default=0.25, help="EKF GPS position std dev in meters")
+    parser.add_argument("--ekf-gps-vel-std-mps", type=float, default=0.25, help="EKF GPS-derived velocity std dev in m/s")
     args = parser.parse_args()
 
     waypoint_path = Path(args.file_name).expanduser().resolve()
@@ -55,13 +63,22 @@ if __name__ == "__main__":
     gps = GPS()
     V.add(gps, inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count'], threaded=True)
 
-    # EKF Localizer
-    ekf_localizer = EKFLocalizer(init_lat=ref_lat0, init_lon=ref_lon0, imu_rate=10, gps_rate=4, heading_unit="rad")
-    V.add(ekf_localizer, inputs=["a_x", "a_y", "yaw", "lat_raw", "lon_raw"], outputs=["lat", "lon", "v_x", "v_y"], threaded=False)
-
     # GPS to XY
     gps_to_xy = GPS_to_xy(ref_lat_deg=ref_lat0, ref_lon_deg=ref_lon0) # BIDC as origin
-    V.add(gps_to_xy, inputs=["lat", "lon"], outputs=["x", "y"], threaded=False)
+    if args.localization_mode == "ekf":
+        ekf_localizer = EKFLocalizer(
+            init_lat=ref_lat0,
+            init_lon=ref_lon0,
+            imu_rate=10,
+            gps_rate=4,
+            heading_unit="rad",
+            gps_pos_std_m=args.ekf_gps_pos_std_m,
+            gps_vel_std_mps=args.ekf_gps_vel_std_mps,
+        )
+        V.add(ekf_localizer, inputs=["a_x", "a_y", "yaw", "lat_raw", "lon_raw"], outputs=["lat", "lon", "v_x", "v_y"], threaded=False)
+        V.add(gps_to_xy, inputs=["lat", "lon"], outputs=["x", "y"], threaded=False)
+    else:
+        V.add(gps_to_xy, inputs=["lat_raw", "lon_raw"], outputs=["x", "y"], threaded=False)
 
     # MPC Controller
     mpc_controller = MPC_Part(path_csv=csv_xy_path, horizon=2, dt_mpc=0.1, wheelbase=1.000506, max_steer=np.radians(35))

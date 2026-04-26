@@ -23,13 +23,31 @@ class EKFLocalizer:
               threaded=True)
     """
 
-    def __init__(self, init_lat, init_lon, imu_rate=100, gps_rate=10, heading_unit="deg", fixed_dt=None):
+    def __init__(
+        self,
+        init_lat,
+        init_lon,
+        imu_rate=100,
+        gps_rate=10,
+        heading_unit="deg",
+        fixed_dt=None,
+        gps_pos_std_m=2.5,
+        gps_vel_std_mps=1.5,
+        use_gps_velocity=True,
+        gps_repeat_epsilon_deg=1e-12,
+    ):
         self.nominal_dt = 1.0 / imu_rate
         self.gps_rate = gps_rate
         self.running = True
         self.last_predict_time = None
         self.heading_unit = heading_unit.lower()
         self.fixed_dt = fixed_dt
+        self.gps_pos_std_m = float(gps_pos_std_m)
+        self.gps_vel_std_mps = float(gps_vel_std_mps)
+        self.use_gps_velocity = use_gps_velocity
+        self.gps_repeat_epsilon_deg = float(gps_repeat_epsilon_deg)
+        self.current_time = 0.0 if self.fixed_dt is not None else None
+        self.last_gps_fix = None
 
         if self.heading_unit not in {"deg", "rad"}:
             raise ValueError(f"Unsupported heading_unit={heading_unit!r}. Use 'deg' or 'rad'.")
@@ -41,15 +59,19 @@ class EKFLocalizer:
         self.vy = 0.0
 
         # EKF: state = [lat, lon, vx, vy]
-        self.ekf = ExtendedKalmanFilter(dim_x=4, dim_z=2)
+        self.ekf = ExtendedKalmanFilter(dim_x=4, dim_z=4)
         self.ekf.x = np.array([init_lat, init_lon, 0.0, 0.0])
 
         # P: initial uncertainty
         # lat/lon in degrees (~1e-5 deg ~= 1m), velocity in m/s
-        self.ekf.P = np.diag([1e-8, 1e-8, 1.0, 1.0])
+        self.ekf.P = np.diag([1e-8, 1e-8, 25.0, 25.0])
 
-        # R: GPS measurement noise (~5m = 4.5e-5 deg std dev)
-        self.ekf.R = np.diag([4.5e-5**2, 4.5e-5**2])
+    def _position_std_deg(self, lat_deg):
+        cos_lat = np.cos(np.radians(lat_deg))
+        cos_lat = np.clip(cos_lat, 1e-6, None)
+        lat_std_deg = (self.gps_pos_std_m / R_EARTH) * RAD2DEG
+        lon_std_deg = (self.gps_pos_std_m / (R_EARTH * cos_lat)) * RAD2DEG
+        return lat_std_deg, lon_std_deg
 
     def _build_Q(self, dt, accel_std=0.1):
         """
@@ -92,16 +114,22 @@ class EKFLocalizer:
         F[1, 2] = dt / (R_EARTH * cos_lat) * RAD2DEG
         return F
 
-    def _h(self, x):
+    def _h_position(self, x):
         """Measurement function: we observe [lat, lon] directly."""
         return x[0:2]
 
-    def _H_jacobian(self, x):
+    def _H_position_jacobian(self, x):
         """Jacobian of _h constant since measurement model is linear."""
         H = np.zeros((2, 4))
         H[0, 0] = 1.0
         H[1, 1] = 1.0
         return H
+
+    def _h_full(self, x):
+        return x
+
+    def _H_full_jacobian(self, x):
+        return np.eye(4)
 
     def _predict(self, ax, ay, dt):
         x = self.ekf.x
@@ -110,11 +138,48 @@ class EKFLocalizer:
         self.ekf.x = self._f(x, dt, ax, ay)
         self.ekf.P = F @ self.ekf.P @ F.T + Q
 
-    def _update_gps(self, lat, lon):
+    def _update_gps_position(self, lat, lon):
+        lat_std_deg, lon_std_deg = self._position_std_deg(lat)
+        self.ekf.R = np.diag([lat_std_deg**2, lon_std_deg**2])
         self.ekf.update(
             z=np.array([lat, lon]),
-            HJacobian=self._H_jacobian,
-            Hx=self._h,
+            HJacobian=self._H_position_jacobian,
+            Hx=self._h_position,
+        )
+
+    def _update_gps_full(self, lat, lon, vx, vy):
+        lat_std_deg, lon_std_deg = self._position_std_deg(lat)
+        self.ekf.R = np.diag([
+            lat_std_deg**2,
+            lon_std_deg**2,
+            self.gps_vel_std_mps**2,
+            self.gps_vel_std_mps**2,
+        ])
+        self.ekf.update(
+            z=np.array([lat, lon, vx, vy]),
+            HJacobian=self._H_full_jacobian,
+            Hx=self._h_full,
+        )
+
+    def _gps_velocity_from_fix_pair(self, prev_lat, prev_lon, prev_time, lat, lon, now):
+        dt = now - prev_time
+        if dt <= 1e-3:
+            return None
+
+        avg_lat = 0.5 * (prev_lat + lat)
+        cos_lat = np.cos(np.radians(avg_lat))
+        cos_lat = np.clip(cos_lat, 1e-6, None)
+        vx = ((lon - prev_lon) / RAD2DEG) * (R_EARTH * cos_lat) / dt
+        vy = ((lat - prev_lat) / RAD2DEG) * R_EARTH / dt
+        return float(vx), float(vy)
+
+    def _is_new_gps_fix(self, lat, lon):
+        if self.last_gps_fix is None:
+            return True
+        prev_lat, prev_lon, _ = self.last_gps_fix
+        return not (
+            abs(float(lat) - prev_lat) <= self.gps_repeat_epsilon_deg
+            and abs(float(lon) - prev_lon) <= self.gps_repeat_epsilon_deg
         )
 
     def _heading_to_radians(self, heading):
@@ -132,6 +197,8 @@ class EKFLocalizer:
         """
         if self.fixed_dt is not None:
             dt = float(self.fixed_dt)
+            self.current_time += dt
+            now = self.current_time
         else:
             now = time.monotonic()
             if self.last_predict_time is None:
@@ -150,8 +217,17 @@ class EKFLocalizer:
         ay_world = ax_body * sin_h + ay_body * cos_h
 
         self._predict(ax_world, ay_world, dt)
-        if gps_lat is not None and gps_lon is not None:
-            self._update_gps(gps_lat, gps_lon)
+        if gps_lat is not None and gps_lon is not None and self._is_new_gps_fix(gps_lat, gps_lon):
+            gps_velocity = None
+            if self.use_gps_velocity and self.last_gps_fix is not None:
+                gps_velocity = self._gps_velocity_from_fix_pair(*self.last_gps_fix, gps_lat, gps_lon, now)
+
+            if gps_velocity is None:
+                self._update_gps_position(gps_lat, gps_lon)
+            else:
+                self._update_gps_full(gps_lat, gps_lon, *gps_velocity)
+
+            self.last_gps_fix = (float(gps_lat), float(gps_lon), float(now))
         self.lat, self.lon, self.vx, self.vy = self.ekf.x
         return self.lat, self.lon, self.vx, self.vy
 

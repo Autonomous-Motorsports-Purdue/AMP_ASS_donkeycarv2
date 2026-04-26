@@ -76,6 +76,9 @@ class SimConfig:
     yaw_rate_noise_degps: float
     accel_noise_mps2: float
     initial_speed_mps: float | None
+    ekf_gps_pos_std_m: float
+    ekf_gps_vel_std_mps: float
+    ekf_use_gps_velocity: bool
     seed: int
 
 
@@ -200,8 +203,13 @@ def run_pseudo_sim(track: TrackData, xy_path: Path, config: SimConfig) -> tuple[
             gps_rate=max(1, int(round(config.gps_rate_hz))),
             heading_unit="rad",
             fixed_dt=config.dt,
+            gps_pos_std_m=config.ekf_gps_pos_std_m,
+            gps_vel_std_mps=config.ekf_gps_vel_std_mps,
+            use_gps_velocity=config.ekf_use_gps_velocity,
         )
     gps_frame = GPS_to_xy(ref_lat_deg=track.ref_lat, ref_lon_deg=track.ref_lon)
+    latest_gps_x = float(track.x[0])
+    latest_gps_y = float(track.y[0])
 
     true_x = float(track.x[0])
     true_y = float(track.y[0])
@@ -242,6 +250,8 @@ def run_pseudo_sim(track: TrackData, xy_path: Path, config: SimConfig) -> tuple[
         "cross_track_error_m": [],
         "estimation_error_m": [],
         "progress_m": [],
+        "raw_gps_x_m": [],
+        "raw_gps_y_m": [],
         "gps_lat": [],
         "gps_lon": [],
     }
@@ -258,6 +268,7 @@ def run_pseudo_sim(track: TrackData, xy_path: Path, config: SimConfig) -> tuple[
             gps_noise_e = rng.normal(0.0, config.gps_noise_m)
             gps_noise_n = rng.normal(0.0, config.gps_noise_m)
             gps_lat, gps_lon = gps_frame.to_latlon(true_x + gps_noise_e, true_y + gps_noise_n)
+            latest_gps_x, latest_gps_y = gps_frame.run(gps_lat, gps_lon)
             next_gps_t += gps_period_s
         else:
             gps_lat, gps_lon = None, None
@@ -271,6 +282,8 @@ def run_pseudo_sim(track: TrackData, xy_path: Path, config: SimConfig) -> tuple[
             assert ekf is not None
             est_lat, est_lon, _, _ = ekf.run(measured_ax_body, measured_ay_body, measured_yaw, gps_lat, gps_lon)
             est_x, est_y = gps_frame.run(est_lat, est_lon)
+        elif config.localization_mode == "gps":
+            est_x, est_y = latest_gps_x, latest_gps_y
         else:
             est_x, est_y = true_x, true_y
 
@@ -324,6 +337,8 @@ def run_pseudo_sim(track: TrackData, xy_path: Path, config: SimConfig) -> tuple[
         logs["cross_track_error_m"].append(cross_track_error_m)
         logs["estimation_error_m"].append(estimation_error_m)
         logs["progress_m"].append(progress_m)
+        logs["raw_gps_x_m"].append(float(latest_gps_x) if gps_lat is not None else float("nan"))
+        logs["raw_gps_y_m"].append(float(latest_gps_y) if gps_lat is not None else float("nan"))
         logs["gps_lat"].append(float(gps_lat) if gps_lat is not None else float("nan"))
         logs["gps_lon"].append(float(gps_lon) if gps_lon is not None else float("nan"))
 
@@ -366,6 +381,16 @@ def save_plot(track: TrackData, logs: dict[str, np.ndarray], output_png: Path) -
     axes[0, 0].plot(track.x, track.y, "k--", linewidth=1.5, label="Reference Path")
     axes[0, 0].plot(logs["true_x_m"], logs["true_y_m"], color="tab:blue", label="True Vehicle")
     axes[0, 0].plot(logs["est_x_m"], logs["est_y_m"], color="tab:orange", alpha=0.8, label="EKF Estimate")
+    gps_mask = np.isfinite(logs["raw_gps_x_m"]) & np.isfinite(logs["raw_gps_y_m"])
+    if np.any(gps_mask):
+        axes[0, 0].scatter(
+            logs["raw_gps_x_m"][gps_mask],
+            logs["raw_gps_y_m"][gps_mask],
+            s=8,
+            alpha=0.5,
+            color="tab:green",
+            label="Raw GPS",
+        )
     axes[0, 0].set_title("Track View")
     axes[0, 0].set_xlabel("X East (m)")
     axes[0, 0].set_ylabel("Y North (m)")
@@ -465,12 +490,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--laps", type=int, default=1, help="number of laps to simulate")
     parser.add_argument("--dt", type=float, default=0.1, help="simulation timestep in seconds")
     parser.add_argument("--gps-rate", type=float, default=4.0, help="GPS update rate in Hz")
-    parser.add_argument("--localization-mode", choices=["ekf", "perfect"], default="ekf", help="whether MPC sees EKF state or true XY")
+    parser.add_argument("--localization-mode", choices=["ekf", "gps", "perfect"], default="ekf", help="whether MPC sees EKF state, held GPS XY, or true XY")
     parser.add_argument("--gps-noise-m", type=float, default=0.5, help="GPS position noise in meters")
     parser.add_argument("--yaw-noise-deg", type=float, default=0.5, help="yaw measurement noise in degrees")
     parser.add_argument("--yaw-rate-noise-degps", type=float, default=0.5, help="yaw-rate measurement noise in deg/s")
     parser.add_argument("--accel-noise-mps2", type=float, default=0.05, help="IMU acceleration noise in m/s^2")
     parser.add_argument("--initial-speed-mps", type=float, default=None, help="initial true speed; defaults to raceline speed or 7.5")
+    parser.add_argument("--ekf-gps-pos-std-m", type=float, default=0.25, help="EKF GPS position measurement std dev")
+    parser.add_argument("--ekf-gps-vel-std-mps", type=float, default=0.25, help="EKF GPS-derived velocity measurement std dev")
+    parser.add_argument("--ekf-no-gps-velocity", action="store_true", help="disable GPS-derived velocity updates inside the EKF")
     parser.add_argument("--steering-lag-s", type=float, default=0.15, help="first-order steering lag")
     parser.add_argument("--throttle-speed-lag-s", type=float, default=0.75, help="first-order speed response lag")
     parser.add_argument("--speed-to-throttle-scale", type=float, default=0.05, help="same mapping used by ClosedLoopController")
@@ -511,6 +539,9 @@ def main() -> None:
         yaw_rate_noise_degps=args.yaw_rate_noise_degps,
         accel_noise_mps2=args.accel_noise_mps2,
         initial_speed_mps=args.initial_speed_mps,
+        ekf_gps_pos_std_m=args.ekf_gps_pos_std_m,
+        ekf_gps_vel_std_mps=args.ekf_gps_vel_std_mps,
+        ekf_use_gps_velocity=not args.ekf_no_gps_velocity,
         seed=args.seed,
     )
 
