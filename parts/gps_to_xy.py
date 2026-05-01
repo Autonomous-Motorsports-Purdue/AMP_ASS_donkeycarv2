@@ -80,6 +80,10 @@ class GPS_to_xy:
         Returns:
             (x_east_m, y_north_m, gps_yaw_deg)
         """
+        print(f"lat_deg:{lat_deg},lon_deg:{lon_deg}")
+        if lat_deg is None or lon_deg is None:
+            print(f"[GPS_TO_XY]lat/lon none. ret 0")
+            return 0,0,0
         x_east_m, y_north_m = self.to_xy(lat_deg, lon_deg)
         if x_east_m is None or y_north_m is None:
             return None, None, self.gps_yaw_deg

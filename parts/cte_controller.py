@@ -196,7 +196,8 @@ class CTE(object):
                                      look_ahead=self.look_ahead, look_behind=self.look_behind, 
                                      from_pt=from_pt, num_pts=self.num_pts)
         
-        if a and b:
+        print(f"[CTE]a:{a},b:{b}")
+        if type(a) == np.ndarray and type(b) == np.ndarray:
             logging.info(f"nearest: ({a[0]}, {a[1]}) to ({x}, {y})")
             a_v = Vec3(a[0], 0., a[1])
             b_v = Vec3(b[0], 0., b[1])
@@ -222,6 +223,16 @@ class CTEController:
     def run(self, x, y, yaw):
         cte, idx = self.cte.run(self.path, x, y)
         steer = self.pid.run(0.0, cte) # we desire 0 cte
+        
+        steer *= -1
+        steer = np.clip(steer,-1,1)
+        # print(f"[CTEController] Reversing steer")
+        print('[CTEController] CTE:', round(cte, 4))
+
+        if np.abs(steer) < 0.2:
+            # base throttle is 2000
+            # max throttle is 2750
+            self.throttle = int(2750 - np.abs(steer) * 3750)
 
         if self.pid.debug:
             print('CTE:', round(cte, 4))

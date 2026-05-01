@@ -1,6 +1,5 @@
-import static_donkeycar.donkeycar.donkeycar as dk
+import donkeycar as dk
 
-from parts.socket_pub_part import TelemetryStreamer
 from parts.threaded_socket_pub_part import ThreadedTelemetryStreamer
 from parts.image_publisher import Image_Publisher
 from parts.image_cv import Object_Detection

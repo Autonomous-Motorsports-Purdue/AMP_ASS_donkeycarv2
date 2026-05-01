@@ -82,7 +82,7 @@ class UART_backup_driver:
             v = 0
             print("v is None")
         # v = int(v * 255)  # throttle from -127 to 127
-        v = 1000
+        # v = 1000
 
         # steering is centered at 128
         # ignore for testing

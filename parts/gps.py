@@ -82,6 +82,10 @@ class GPS:
             "last_update_monotonic": None,
         }
 
+        # print(f"sleeping for 2")
+        # sleep(2)
+        # self.gnss_queue = Queue()
+
     @staticmethod
     def safe_float(x, default=None):
         if x is None or x == "":
@@ -287,6 +291,7 @@ class GPS:
         self._drain_gnss_queue()
 
         with self.lock:
+            print(f"[GPS]-{self._to_legacy_tuple(self.latest_output)}")
             return dict(self.latest_output) if self.return_dict else self._to_legacy_tuple(self.latest_output)
 
     def shutdown(self):
@@ -328,7 +333,7 @@ def _format_output(sample):
 
 
 def main():
-    gps = GPS("/dev/ttyACM2", return_dict=True)
+    gps = GPS("/dev/ttyACM0", return_dict=True)
     print("Starting GPS() standalone test using class defaults.")
     print("Press Ctrl+C to stop.")
 
