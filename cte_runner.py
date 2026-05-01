@@ -53,7 +53,7 @@ if __name__ == "__main__":
     # MPC Controller
     csv_xy_path = args.file_name.split('.')[0] + "_xy" + ".csv"
     throttle = 2500
-    kp, ki, kd = 0.5, 0.0, 0.1
+    kp, ki, kd = 0.4, 0.0, 0.2
     controller = CTEController(path_csv=csv_xy_path, throttle=throttle, kp=kp, ki=ki, kd=kd)
 
     V.add(controller, inputs=["x", "y", "gps_yaw"], outputs=["controls/throttle", "controls/steering"], threaded=False)

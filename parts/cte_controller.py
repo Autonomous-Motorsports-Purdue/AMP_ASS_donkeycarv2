@@ -56,7 +56,9 @@ class PIDController:
 
         # Add differential component (avoiding divide-by-zero).
         if dt > 0:
-            curr_alpha += self.Kd * ((feedback - self.prev_feedback) / float(dt))
+            # D term should be opposing 
+            # feed - prev instead of prev - feed
+            curr_alpha -= self.Kd * ((feedback - self.prev_feedback) / float(dt))
 
         # Maintain memory for next loop.
         self.prev_tm = curr_tm
@@ -229,10 +231,13 @@ class CTEController:
         # print(f"[CTEController] Reversing steer")
         print('[CTEController] CTE:', round(cte, 4))
 
-        if np.abs(steer) < 0.2:
-            # base throttle is 2000
-            # max throttle is 2750
-            self.throttle = int(2750 - np.abs(steer) * 3750)
+        STEER_THRESHOLD = 0.2
+        HIGH = 3500
+        LOW = 2500
+        if np.abs(steer) < STEER_THRESHOLD:
+            # Linear ramp from HIGH at 0 steer to LOW at STEER_THRESHOLD steer.
+            self.throttle = HIGH - ((HIGH - LOW) / STEER_THRESHOLD * np.abs(steer))
+            self.throttle = int(self.throttle)
 
         if self.pid.debug:
             print('CTE:', round(cte, 4))
