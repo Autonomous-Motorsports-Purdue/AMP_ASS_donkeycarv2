@@ -27,13 +27,13 @@ class Logger_GPS():
         # Writing the fields
         self.csvwriter.writerow(fields)
         
-    def run(self, lat, lon, steering, throttle, fix):
+    def run(self, lat, lon, steering, throttle, fix, gps_heading, gps_speed):
         """
         Logs the current image, segmented Image, centroid, steering, and throttle values.
         Saves the images in their respective directory and logs the image paths and other data into a CSV.
         """
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S.%f')
-        rows = [timestamp, lat, lon, steering, throttle,fix]    
+        rows = [timestamp, lat, lon, steering, throttle,fix, gps_heading, gps_speed]    
         self.csvwriter.writerow(rows)
             
             

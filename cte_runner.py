@@ -44,7 +44,7 @@ if __name__ == "__main__":
     V.add(uart, inputs=["controls/throttle", "controls/steering", "safety/heartbeat"], outputs=[], threaded=False)
 
     gps = GPS('/dev/ttyACM0')
-    V.add(gps, inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count', 'gps_heading'], threaded=True)
+    V.add(gps, inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count', 'gps_heading', 'gps_speed_mps'], threaded=True)
 
     # GPS to XY
     gps_to_xy = GPS_to_xy(ref_lat_deg=ref_lat0, ref_lon_deg=ref_lon0) # first point as origin
@@ -60,6 +60,6 @@ if __name__ == "__main__":
 
     V.add(ThreadedTelemetryStreamer(), inputs=['lat_raw','lon_raw','gps_yaw', 'controls/steering'])
 
-    V.add(Logger_GPS(), inputs=['lat_raw','lon_raw', 'controls/steering', 'controls/throttle', 'fix'])
+    V.add(Logger_GPS(), inputs=['lat_raw','lon_raw', 'controls/steering', 'controls/throttle', 'fix', 'gps_heading', 'gps_speed_mps'])
 
     V.start(rate_hz=50, max_loop_count=None)

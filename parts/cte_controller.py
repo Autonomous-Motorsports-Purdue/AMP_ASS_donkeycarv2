@@ -238,6 +238,9 @@ class CTEController:
             # Linear ramp from HIGH at 0 steer to LOW at STEER_THRESHOLD steer.
             self.throttle = HIGH - ((HIGH - LOW) / STEER_THRESHOLD * np.abs(steer))
             self.throttle = int(self.throttle)
+        else:
+            # Set throttle to low value when turning
+            self.throttle = LOW
 
         if self.pid.debug:
             print('CTE:', round(cte, 4))

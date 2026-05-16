@@ -190,6 +190,7 @@ class GPS:
             out.get("hdop"),
             out.get("num_sv"),
             out.get("course_deg"),
+            out.get("speed_mps")
         )
 
     def _drain_gnss_queue(self):
@@ -218,6 +219,8 @@ class GPS:
                 out["last_update_monotonic"] = monotonic()
                 msg_time = getattr(data, "time", None)
                 out["last_msg_time"] = msg_time if msg_time not in ("", None) else out.get("last_msg_time")
+
+                out["speed_mps"] = None
 
                 if identity.endswith("GGA"):
                     lat = self.safe_float(getattr(data, "lat", None), out.get("lat"))
