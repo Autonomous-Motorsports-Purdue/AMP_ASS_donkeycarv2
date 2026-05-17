@@ -7,6 +7,7 @@ from parts.health_check import HealthCheck
 from parts.cte_controller import CTEController
 from parts.threaded_socket_pub_part import ThreadedTelemetryStreamer
 from parts.logger_gps import Logger_GPS
+from parts.bno086 import BNO086
 
 import numpy as np
 
@@ -40,26 +41,31 @@ if __name__ == "__main__":
     V.add(heartbeat, inputs=[], outputs=["safety/heartbeat"])
 
     # # UART driver
-    uart = UART_backup_driver("/dev/ttyACM1")
+    uart = UART_backup_driver("/dev/ttyACM2")
     V.add(uart, inputs=["controls/throttle", "controls/steering", "safety/heartbeat"], outputs=[], threaded=False)
 
-    gps = GPS('/dev/ttyACM0')
+    gps = GPS('/dev/ttyACM1')
     V.add(gps, inputs=[], outputs=['lat_raw', 'lon_raw', 'alt', 'fix', 'corr_age', 'hdop', 'sat_count', 'gps_heading', 'gps_speed_mps'], threaded=True)
+
+    # IMU
+    imu = BNO086(port='/dev/ttyACM0')
+    V.add(imu, inputs=[], outputs=['imu_heading', 'imu_accuracy_deg'], threaded=True)
 
     # GPS to XY
     gps_to_xy = GPS_to_xy(ref_lat_deg=ref_lat0, ref_lon_deg=ref_lon0) # first point as origin
     V.add(gps_to_xy, inputs=["lat_raw", "lon_raw"], outputs=["x", "y", "gps_yaw"], threaded=False)
 
-    # MPC Controller
-    csv_xy_path = args.file_name.split('.')[0] + "_xy" + ".csv"
+    # PID Controller
+    # NOTE: must include "_throttle", with hardcoded throttle labels.
+    csv_xy_path = args.file_name.split('.')[0] + "_xy_throttle" + ".csv"
     throttle = 2500
     kp, ki, kd = 0.4, 0.0, 0.3
     controller = CTEController(path_csv=csv_xy_path, throttle=throttle, kp=kp, ki=ki, kd=kd)
 
     V.add(controller, inputs=["x", "y", "gps_yaw"], outputs=["controls/throttle", "controls/steering"], threaded=False)
 
-    V.add(ThreadedTelemetryStreamer(), inputs=['lat_raw','lon_raw','gps_yaw', 'controls/steering'])
+    V.add(ThreadedTelemetryStreamer(), inputs=['lat_raw','lon_raw','imu_heading', 'controls/steering'])
 
-    V.add(Logger_GPS(), inputs=['lat_raw','lon_raw', 'controls/steering', 'controls/throttle', 'fix', 'gps_heading', 'gps_speed_mps'])
+    V.add(Logger_GPS(), inputs=['lat_raw','lon_raw', 'controls/steering', 'controls/throttle', 'fix', 'gps_heading', 'gps_speed_mps', 'imu_heading', 'imu_accuracy_deg'], outputs=[])
 
     V.start(rate_hz=50, max_loop_count=None)

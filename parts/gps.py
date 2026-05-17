@@ -334,9 +334,11 @@ def _format_output(sample):
         f"num_sv={sample.get('num_sv')}, diff_age={sample.get('diff_age')}"
     )
 
+import sys
 
 def main():
-    gps = GPS("/dev/ttyACM0", return_dict=True)
+    print(sys.argv[1])
+    gps = GPS(sys.argv[1], return_dict=True)
     print("Starting GPS() standalone test using class defaults.")
     print("Press Ctrl+C to stop.")
 

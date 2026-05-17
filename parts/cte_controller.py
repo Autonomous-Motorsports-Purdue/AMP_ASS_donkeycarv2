@@ -219,11 +219,20 @@ class CTEController:
     def __init__(self, path_csv, throttle=1000, kp=0.5, ki=0.0, kd=0.0):
         self.cte = CTE(look_ahead=3, look_behind=1)
         self.pid = PIDController(p=kp, i=ki, d=kd, debug=False)
-        self.path = np.genfromtxt(path_csv, delimiter=',', skip_header=1, dtype=float, encoding='utf-8')
-        self.throttle = throttle # TODO: change to be adaptive based on selected point in path
+        a = np.genfromtxt(path_csv, delimiter=',', dtype=float, encoding='utf-8', skip_header=0)
+        if a.ndim == 1:
+            a = np.reshape(a, (1, -1))
+        if a.shape[1] >= 3 and np.isfinite(a[0, 0]) and np.isfinite(a[0, 1]):
+            self.path_xy = a[:, :2]
+            self.pwm_table = np.asarray(a[:, -1], dtype=int)
+        else:
+            a = np.genfromtxt(path_csv, delimiter=',', dtype=float, encoding='utf-8', skip_header=1)
+            self.path_xy = a[:, :2]
+            self.pwm_table = None
+        self.throttle = throttle
 
     def run(self, x, y, yaw):
-        cte, idx = self.cte.run(self.path, x, y)
+        cte, idx = self.cte.run(self.path_xy, x, y)
         steer = self.pid.run(0.0, cte) # we desire 0 cte
         
         steer *= -1
@@ -233,18 +242,20 @@ class CTEController:
         # print(f"[CTEController] Reversing steer")
         print('[CTEController] CTE:', round(cte, 4))
 
-        STEER_THRESHOLD = 0.2
-        HIGH = 2600
-        LOW = 1400
-        if np.abs(steer) < STEER_THRESHOLD:
-            # Linear ramp from HIGH at 0 steer to LOW at STEER_THRESHOLD steer.
-            self.throttle = HIGH - ((HIGH - LOW) / STEER_THRESHOLD * np.abs(steer))
-            self.throttle = int(self.throttle)
+        if self.pwm_table is not None:
+            i = 0 if idx is None else int(idx) % len(self.pwm_table)
+            throttle = int(self.pwm_table[i])
         else:
-            # Set throttle to low value when turning
-            self.throttle = LOW
+            STEER_THRESHOLD = 0.2
+            HIGH = 2600
+            LOW = 1400
+            if np.abs(steer) < STEER_THRESHOLD:
+                throttle = int(HIGH - ((HIGH - LOW) / STEER_THRESHOLD * np.abs(steer)))
+            else:
+                throttle = LOW
+            throttle = -1
 
         if self.pid.debug:
             print('CTE:', round(cte, 4))
         
-        return self.throttle, steer
+        return throttle, steer

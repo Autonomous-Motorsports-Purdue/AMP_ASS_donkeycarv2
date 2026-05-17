@@ -23,17 +23,17 @@ class Logger_GPS():
         self.csvwriter = csv.writer(self.csvfile)
 
         # fields = ['timestamp', 'image', 'segmented', 'centroid', 'steering', 'throttle']
-        fields = ['timestamp', 'latitude', 'longitude', 'steering', 'throttle', 'fix', 'gps_heading', 'gps_speed']
+        fields = ['timestamp', 'latitude', 'longitude', 'steering', 'throttle', 'fix', 'gps_heading', 'gps_speed', 'imu_heading', 'imu_accuracy_deg']
         # Writing the fields
         self.csvwriter.writerow(fields)
         
-    def run(self, lat, lon, steering, throttle, fix, gps_heading, gps_speed):
+    def run(self, lat, lon, steering, throttle, fix, gps_heading, gps_speed, imu_heading, imu_accuracy_deg):
         """
         Logs the current image, segmented Image, centroid, steering, and throttle values.
         Saves the images in their respective directory and logs the image paths and other data into a CSV.
         """
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S.%f')
-        rows = [timestamp, lat, lon, steering, throttle,fix, gps_heading, gps_speed]    
+        rows = [timestamp, lat, lon, steering, throttle,fix, gps_heading, gps_speed, imu_heading, imu_accuracy_deg]    
         self.csvwriter.writerow(rows)
             
             
