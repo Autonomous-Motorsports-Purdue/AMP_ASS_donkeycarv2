@@ -217,7 +217,7 @@ class CTE(object):
     
 class CTEController:
     def __init__(self, path_csv, throttle=1000, kp=0.5, ki=0.0, kd=0.0):
-        self.cte = CTE(look_ahead=1, look_behind=1)
+        self.cte = CTE(look_ahead=3, look_behind=1)
         self.pid = PIDController(p=kp, i=ki, d=kd, debug=False)
         self.path = np.genfromtxt(path_csv, delimiter=',', skip_header=1, dtype=float, encoding='utf-8')
         self.throttle = throttle # TODO: change to be adaptive based on selected point in path
@@ -228,12 +228,14 @@ class CTEController:
         
         steer *= -1
         steer = np.clip(steer,-1,1)
+        if abs(steer) < 0.02:
+            steer = 0
         # print(f"[CTEController] Reversing steer")
         print('[CTEController] CTE:', round(cte, 4))
 
         STEER_THRESHOLD = 0.2
-        HIGH = 3500
-        LOW = 2500
+        HIGH = 2600
+        LOW = 1400
         if np.abs(steer) < STEER_THRESHOLD:
             # Linear ramp from HIGH at 0 steer to LOW at STEER_THRESHOLD steer.
             self.throttle = HIGH - ((HIGH - LOW) / STEER_THRESHOLD * np.abs(steer))

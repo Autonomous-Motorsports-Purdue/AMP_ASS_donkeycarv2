@@ -23,7 +23,7 @@ class Logger_GPS():
         self.csvwriter = csv.writer(self.csvfile)
 
         # fields = ['timestamp', 'image', 'segmented', 'centroid', 'steering', 'throttle']
-        fields = ['timestamp', 'latitude', 'longitude', 'throttle', 'steering', 'fix']
+        fields = ['timestamp', 'latitude', 'longitude', 'steering', 'throttle', 'fix', 'gps_heading', 'gps_speed']
         # Writing the fields
         self.csvwriter.writerow(fields)
         

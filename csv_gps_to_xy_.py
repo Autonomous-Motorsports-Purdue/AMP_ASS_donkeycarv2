@@ -13,16 +13,18 @@ def latlon_to_local_m(lat, lon, lat0, lon0):
     x_east = (lon - lon0) / RAD2DEG * (R_EARTH * cos_lat0)
     return x_east, y_north
 
-def convert_gps_to_xy(gps_file_name, reverse=True):
+def convert_gps_to_xy(gps_file_name, reverse=False):
     data = np.genfromtxt(gps_file_name, delimiter=',', skip_header=1, dtype=float, encoding='utf-8')
-    # lat0 = data[0,0]
-    lat0 = data[0,2]
-    # lon0 = data[0,1]
-    lon0 = data[0,3]
-    # x_coords, y_coords = latlon_to_local_m(data[:,0], data[:,1], lat0, lon0)
-    x_coords, y_coords = latlon_to_local_m(data[:,2], data[:,3], lat0, lon0)
+    lat0 = data[0,0]
+    #lat0 = data[0,2]
+    lon0 = data[0,1]
+    #lon0 = data[0,3]
+    x_coords, y_coords = latlon_to_local_m(data[:,0], data[:,1], lat0, lon0)
+    #x_coords, y_coords = latlon_to_local_m(data[:,2], data[:,3], lat0, lon0)
     psi_rad = 0 * np.ones(len(x_coords))
+    print(f"reverse:{reverse}")
     if reverse:
+        print(f"reversing")
         x_coords = x_coords[::-1]
         y_coords = y_coords[::-1]
         psi_rad = psi_rad[::-1]

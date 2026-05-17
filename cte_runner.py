@@ -6,10 +6,7 @@ from parts.gps_to_xy import GPS_to_xy
 from parts.health_check import HealthCheck
 from parts.cte_controller import CTEController
 from parts.threaded_socket_pub_part import ThreadedTelemetryStreamer
-<<<<<<< Updated upstream
 from parts.logger_gps import Logger_GPS
-=======
->>>>>>> Stashed changes
 
 import numpy as np
 
@@ -56,19 +53,13 @@ if __name__ == "__main__":
     # MPC Controller
     csv_xy_path = args.file_name.split('.')[0] + "_xy" + ".csv"
     throttle = 2500
-    kp, ki, kd = 0.4, 0.0, 0.2
+    kp, ki, kd = 0.4, 0.0, 0.3
     controller = CTEController(path_csv=csv_xy_path, throttle=throttle, kp=kp, ki=ki, kd=kd)
 
     V.add(controller, inputs=["x", "y", "gps_yaw"], outputs=["controls/throttle", "controls/steering"], threaded=False)
 
-<<<<<<< Updated upstream
     V.add(ThreadedTelemetryStreamer(), inputs=['lat_raw','lon_raw','gps_yaw', 'controls/steering'])
 
     V.add(Logger_GPS(), inputs=['lat_raw','lon_raw', 'controls/steering', 'controls/throttle', 'fix', 'gps_heading', 'gps_speed_mps'])
 
     V.start(rate_hz=50, max_loop_count=None)
-=======
-    V.add(ThreadedTelemetryStreamer(), inputs=['lat_raw','lon_raw','gps_heading', 'controls/steering'])
-
-    V.start(rate_hz=100, max_loop_count=None)
->>>>>>> Stashed changes
