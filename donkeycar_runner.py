@@ -21,6 +21,11 @@ if __name__ == "__main__":
     #V.add(LaneDetect(), inputs=['sensors/ZED/RGB/left', ' ', ' '], outputs=['points', 'perception/segmentedTrack'], threaded=False)
     #V.add(Logger(), inputs=['sensors/ZED/RGB/left', 'perception/segmentedTrack', 'centroid', 'controls/steering', 'controls/throttle'], threaded=False)
     
+    V.add(PhoneSensors(), inputs=[], outputs=['accX', 'accY', 'accZ', 'gyrX', 'gyrY', 'gyrZ', 'yaw', 'pitch', 'roll'])
+    V.add(PhoneSensorsVisualizer(),
+        inputs=['accX', 'accY', 'accZ', 'gyrX', 'gyrY', 'gyrZ', 'yaw', 'pitch', 'roll'],
+        outputs=[])
+    
     controller = LocalWebController()
     # web controller just expects all these things even though they don't exist
     V.add(
