@@ -17,3 +17,4 @@ Usage:
     - onnx argument points to an old segmentation model, we take a point near the middle of the mask and use it as a starting point to help SAM 3
     - The other arguments arent that important and it's vibe coded anyway
 - After the labels and labelled images are obtained go to TwinLiteNetPlus and finetune the model
+-- Nov 8 2026 wong508
