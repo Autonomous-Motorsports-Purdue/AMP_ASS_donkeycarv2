@@ -100,7 +100,7 @@ class Curve_fit():
                     i -= 1
                
         if True:
-            dbscan = DBSCAN(eps=50, min_samples=5) // TODO: TUNE THIS
+            dbscan = DBSCAN(eps=50, min_samples=5) # TODO: TUNE THIS
             dbscan.fit(points)
             
             # pca = PCA(n_components=2).fit(points)
@@ -250,16 +250,16 @@ class Curve_fit():
         sobelLeft = cv2.Sobel(img, cv2.CV_8UC1, 1, 0, ksize=1)
         sobelLeft[:, :2] = 0
         
-        with open('ransacDumps/sobelLeft' + str(self.savedCount) + '.pkl', 'wb') as f:
-            pickle.dump(sobelLeft, f)
+        #with open('ransacDumps/sobelLeft' + str(self.savedCount) + '.pkl', 'wb') as f:
+         #   pickle.dump(sobelLeft, f)
         ransac_left = self.ransac(sobelLeft, True)
 
         inverse = cv2.bitwise_not(img)
         sobelRight = cv2.Sobel(inverse, cv2.CV_8UC1, 1, 0, ksize=1)
         sobelRight[:, -2:] = 0
         
-        with open('ransacDumps/sobelRight' + str(self.savedCount) + '.pkl', 'wb') as f:
-            pickle.dump(sobelLeft, f)
+        #with open('ransacDumps/sobelRight' + str(self.savedCount) + '.pkl', 'wb') as f:
+         #   pickle.dump(sobelLeft, f)
 
         ransac_right = self.ransac(sobelRight, False)
 
